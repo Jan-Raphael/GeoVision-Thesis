@@ -23,8 +23,9 @@ Minimum reading before touching code:
 | touch device auth, pairing, or ingest | `05-Hardware/Device-Pairing-Protocol.md` |
 | start a module | `03-Modules/Build-Order.md` + that module's note |
 
-Also check `99-Decisions/Progress-Log.md` (top row) to see where the project actually stands,
-and `99-Decisions/ADR-Index.md` before questioning a design choice — it is probably already
+Also check `PENDING.md` (the ranked priority board — what to do next),
+`99-Decisions/Progress-Log.md` (top row, where the project actually stands), and
+`99-Decisions/ADR-Index.md` before questioning a design choice — it is probably already
 argued there.
 
 ## Rule 1 — one module at a time

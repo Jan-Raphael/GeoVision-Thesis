@@ -13,6 +13,8 @@ updated: 2026-08-12
 > Code follows the vault. If code and vault disagree, the vault is corrected first (via an ADR),
 > then the code is changed. Never invent a table, endpoint, enum, or filename that is not defined here.
 
+> 👉 **Wondering what to do next? Open [[PENDING]]** — the master priority board.
+
 ## Reading order (first session)
 
 1. [[Master-Architecture]] — the finalized end-to-end design. **Read fully.**
@@ -43,6 +45,7 @@ updated: 2026-08-12
 
 | Folder | Contains |
 |---|---|
+| *(root)* | [[PENDING]] — **what to do next, ranked by urgency** |
 | `01-Architecture/` | [[Master-Architecture]], [[Repository-Structure]], [[Tech-Stack]], [[Naming-Conventions]], [[Local-Environment-Setup]] |
 | `02-Domain/` | [[Domain-Model]], [[Roles-and-Permissions]], [[Construction-Stages]], [[Progress-Calculation]], [[Project-Status-Rules]] |
 | `03-Modules/` | One build-spec note per module — see [[Build-Order]] |

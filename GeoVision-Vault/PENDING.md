@@ -1,0 +1,156 @@
+---
+title: PENDING — master priority board
+type: index
+status: living
+updated: 2026-08-13
+---
+
+# PENDING — what needs doing, in priority order
+
+> **How to use this file.** It answers one question: *"what should I do next?"*
+> [[Build-Order]] holds module sequence and status; [[Open-Questions]] holds unresolved
+> decisions; [[Progress-Log]] holds history. **This file ranks everything by urgency.**
+> Review it at the start of every working session and tick things off.
+
+**Priority key**
+`P0` blocks work right now · `P1` **calendar-bound — start now regardless of code** ·
+`P2` needed before the defense · `P3` deferred / optional
+
+> ⚠ **The single most important thing on this page is the P1 section.** Coding time can be
+> compressed; calendar time cannot. Hardware shipping, dataset collection, and weeks of real
+> site captures are the things that will actually decide whether this thesis lands.
+
+---
+
+## 🚩 Fill this in first
+
+| Item | Value | Why it matters |
+|---|---|---|
+| **Defense / submission date** | ❓ *unknown* | Every deadline below is relative to it. Fill this in and the rest of the plan becomes concrete. |
+| Adviser check-in cadence | ❓ | Determines how often you need a demoable state |
+| Panel documentation format | ❓ (Q8) | Cheap to ask now, expensive to reformat later |
+
+---
+
+## P0 — Blocking right now
+
+| # | Task | Blocks | Notes |
+|---|---|---|---|
+| P0-1 | **Get a PostgreSQL running** | Modules 02, 03, 04, 05, 09–15 | Two routes — see [[Local-Environment-Setup]]. *Native Windows installer* (~10 min, no Windows Update, no reboot) unblocks Modules 02–03 immediately. *Docker Desktop* (~1 h, needs Windows Update + WSL2 + 2 reboots) unblocks everything and matches production. |
+| P0-2 | Update Windows to build 19045+ | Docker Desktop | Prerequisite for P0-3. Runs unattended — start it and walk away. |
+| P0-3 | Install Docker Desktop (WSL2) | Modules 05, 09, 14, 16 (Redis + Celery + full stack) | Not urgent *today* if you take the native-Postgres route, but required before Module 05. Guide: [[Local-Environment-Setup]] |
+
+**Not blocked by any of the above:** [[Module-06-AI-Preprocessing]] needs no services and no
+labelled data. If P0-1 will take a while, build Module 06 — it is correctly sequenced anyway
+(settle the pipeline *before* annotating, or you re-annotate).
+
+---
+
+## P1 — Calendar-bound: start now, in parallel with coding
+
+These have lead times that no amount of coding speed can recover. **This is the real critical
+path of the thesis.**
+
+| # | Task | Lead time | Why now |
+|---|---|---|---|
+| P1-1 | **Order hardware** — ESP32-CAM (AI-Thinker, +1 spare), NEO-6M GPS, DS3231 RTC, microSD 32 GB, FTDI/CP2102 programmer, IP65 enclosure, power bank | 1–4 weeks shipping | Nothing accelerates delivery. A dead-on-arrival board with no spare costs another full cycle. BOM: [[ESP32-CAM-Node]] |
+| P1-2 | **Secure a real construction site + written permission** | days–weeks of asking | Real captures over real weeks are what make this a thesis rather than a demo. Also covers you for publishing the images. (Q3) |
+| P1-3 | **Start dataset collection** — target ≥ 1 500 images, ≥ 150/class | weeks | Highest-yield source: construction time-lapse videos on YouTube (one video can cover all 10 stages of one building). Record source URLs + licences as you go. [[Dataset-Spec]] |
+| P1-4 | **Set up CVAT and start annotating** | ongoing | Annotation is slow and cannot be rushed at the end. [[Annotation-Guide]] |
+| P1-5 | **Get the stage percentages reviewed** by a civil engineer / project manager (Q1) | days–weeks to schedule | Every progress number in the system rests on this table. A cited expert review turns an assumption into a defensible methodology choice. [[Construction-Stages]] |
+| P1-6 | Deploy the camera on site as early as possible | weeks of accumulation | A rising progress curve over real calendar time is the single most convincing demo artifact. |
+| P1-7 | Confirm GPU access for training (Q7) | — | No local GPU ⇒ budget Colab/Kaggle sessions for [[Module-08-YOLO-Detection]] |
+
+> **If you do nothing else this week, do P1-1, P1-2, and P1-3.** They are all waiting on other
+> people or on shipping, and every day of delay is unrecoverable.
+
+---
+
+## P2 — Needed before the defense
+
+| # | Task | Owner module |
+|---|---|---|
+| P2-1 | Modules 02 → 16 built and tested | [[Build-Order]] |
+| P2-2 | Decide where trained checkpoints live (Q10) — Release assets / Drive + hash / git-lfs | [[Module-07-Classifier-Training]] |
+| P2-3 | Verify the ESP32 pinout for *your* board revision (Q2) and record it | [[ESP32-CAM-Node]] |
+| P2-4 | Decide the public server host + HTTPS endpoint for the field device (Q4) — Cloudflare Tunnel is the cheap answer | [[Module-16-Deployment]] |
+| P2-5 | Measure real deep-sleep current and battery life (measured, not estimated) | [[Capture-Schedule-and-Power]] |
+| P2-6 | Generate all evaluation figures by script | [[Evaluation-Plan]] |
+| P2-7 | Double-annotate 10 % and compute Cohen's κ | [[Annotation-Guide]] |
+| P2-8 | Write the manuscript alongside the build, not after | [[Thesis-Mapping]] |
+| P2-9 | Rehearse the demo end-to-end, with an offline fallback | [[Module-16-Deployment]] |
+| P2-10 | Back up the vault + repo somewhere off this machine | — |
+
+---
+
+## P3 — Deferred / optional
+
+Everything in section 3 of [[Open-Questions]] (blueprint-aware AI, weather API, OTA, mobile
+app, i18n, multi-building…). **Do not start any of these until P0–P2 are done.** They are
+future-work material for the conclusion chapter, not v1 scope.
+
+---
+
+## Module status (summary)
+
+Authoritative board: [[Build-Order]].
+
+| | Module | Status | Blocked by |
+|---|---|---|---|
+| 01 | Foundation & Setup | ✅ done | — |
+| 02 | Database Schema | ▶ next | **P0-1** |
+| 03 | Auth & Users | pending | 02 |
+| 04 | Projects & Folders | pending | 03 + MinIO |
+| 05 | Device Pairing & Ingestion | pending | 04 + **Redis (P0-3)** |
+| 06 | AI Preprocessing | **available now** | — nothing |
+| 07 | Classifier Training | pending | **P1-3, P1-4** (dataset) |
+| 08 | YOLO Detection | pending | P1-3, P1-4 |
+| 09 | Inference & Progress | pending | 05, 07, 08 — *the progress engine can be built early against a `StubClassifier`* |
+| 10 | Reports & Remarks | pending | 09 |
+| 11 | Public Dashboard | pending | 04 |
+| 12 | Owner Dashboard | pending | 11 |
+| 13 | Firmware | pending | **P1-1** (hardware) |
+| 14 | Realtime | pending | 09, 12 |
+| 15 | Testing & Evaluation | pending | all |
+| 16 | Deployment | pending | all + **P0-3** |
+
+---
+
+## Decision queue
+
+Unresolved questions, from [[Open-Questions]]. Each one blocks or reshapes work:
+
+| | Question | Priority |
+|---|---|---|
+| Q9 | Install Docker Desktop | **P0** |
+| Q1 | Are the stage percentages realistic? | **P1** |
+| Q3 | Which site, with whose permission? | **P1** |
+| Q5 | How many labelled images can you realistically get? | **P1** |
+| Q7 | GPU for training? | P1 |
+| Q2 | Exact ESP32 pinout for your board | P2 |
+| Q4 | Where does the server run? | P2 |
+| Q10 | Where do checkpoints live? | P2 |
+| Q8 | Panel documentation format | P2 |
+| Q6 | Timezone / window policy | assumed daily, `Asia/Manila` |
+
+---
+
+## Top risks
+
+Full register in [[Open-Questions]] §4. The three most likely to hurt:
+
+1. **Not enough training data** → start P1-3 today; time-lapse frames are the highest-yield source.
+2. **Hardware arrives late or dead** → P1-1 today, buy a spare, build against `scripts/simulate_device.py` meanwhile.
+3. **Site access falls through** → line up a backup site now, not when the first one says no.
+
+---
+
+## Suggested weekly rhythm
+
+- **Every session:** read this file → check [[Build-Order]] → build one module → update
+  [[Progress-Log]].
+- **Weekly:** re-rank this file; annotate a batch of images; check the deployed camera.
+- **Never:** start a P3 item while a P1 item is untouched.
+
+## Related
+[[00-START-HERE]] · [[Build-Order]] · [[Open-Questions]] · [[Progress-Log]] · [[Local-Environment-Setup]]
