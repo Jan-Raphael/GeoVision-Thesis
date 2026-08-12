@@ -1,0 +1,44 @@
+# GeoVision — line ending and diff policy
+#
+# WHY THIS FILE EXISTS: development happens on Windows, but the backend, worker,
+# and CI all run in Linux containers. Without `eol=lf`, Windows checkouts write
+# CRLF into shell scripts and entrypoints, and Linux then fails with the classic
+# `bad interpreter: /bin/sh^M`. Normalising here costs nothing and removes an
+# entire category of "works on my machine".
+
+* text=auto eol=lf
+
+# Scripts that MUST be LF (they are executed inside containers)
+*.sh            text eol=lf
+*.bash          text eol=lf
+Makefile        text eol=lf
+Dockerfile*     text eol=lf
+*.Dockerfile    text eol=lf
+
+# Windows-only helpers keep CRLF
+*.ps1           text eol=crlf
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+
+# Binary assets — never touch, never diff as text
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.webp          binary
+*.gif           binary
+*.ico           binary
+*.pdf           binary
+*.pt            binary
+*.pth           binary
+*.onnx          binary
+*.zip           binary
+*.tar.gz        binary
+*.woff          binary
+*.woff2         binary
+
+# Lockfiles: keep them in the diff but never merge them by hand
+uv.lock         -diff linguist-generated=true
+package-lock.json -diff linguist-generated=true
+
+# Jupyter notebooks are noisy in diffs
+*.ipynb         text eol=lf -diff

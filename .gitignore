@@ -1,0 +1,132 @@
+# ---------------------------------------------------------------------------
+# GeoVision — .gitignore
+# Note the negation patterns: several directories are ignored for their CONTENT
+# but must survive in the tree (.gitkeep) or have tracked metadata files.
+# ---------------------------------------------------------------------------
+
+# --- Secrets (never commit) ------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!**/pytest.key
+secrets/
+device_secrets/
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib60/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# Type checkers / linters
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+
+# --- Node / frontend -------------------------------------------------------
+node_modules/
+dashboard/dist/
+dashboard/dist-ssr/
+.vite/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+
+# --- PlatformIO / firmware -------------------------------------------------
+.pio/
+.pioenvs/
+.piolibdeps/
+firmware/**/.vscode/
+firmware/**/*.bin
+firmware/**/*.elf
+
+# --- Machine learning artifacts -------------------------------------------
+# Checkpoints are large and are distributed out-of-band (release assets / Drive).
+models/**
+!models/.gitkeep
+!models/**/.gitkeep
+
+# Training runs, evaluation figures, generated reports.
+outputs/**
+!outputs/.gitkeep
+!outputs/**/.gitkeep
+
+# --- Dataset ---------------------------------------------------------------
+# Raw and processed images stay out of git (size + licensing).
+dataset/raw/**
+dataset/processed/**
+dataset/augmented/**
+dataset/labels/**
+!dataset/**/.gitkeep
+
+# ...but the small CSVs that define the dataset ARE tracked, because every
+# number in the thesis must be reproducible from them.
+!dataset/metadata/
+!dataset/metadata/*.csv
+!dataset/labels/detection/data.yaml
+
+# --- Local object storage / database volumes ------------------------------
+.minio/
+pgdata/
+docker/volumes/
+
+# --- OS / editor -----------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# --- Obsidian --------------------------------------------------------------
+# Vault content IS tracked (it is the source of truth). Only local UI state is not.
+GeoVision-Vault/.obsidian/workspace.json
+GeoVision-Vault/.obsidian/workspace-mobile.json
+GeoVision-Vault/.trash/
+
+# --- Misc ------------------------------------------------------------------
+*.log
+logs/
+tmp/
+.scratch/

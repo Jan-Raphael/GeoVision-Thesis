@@ -1,0 +1,87 @@
+; ---------------------------------------------------------------------------
+; GeoVision - Clean Architecture boundary enforcement
+;
+; The vault states these rules in prose; this file makes them executable, so a
+; violation fails a commit instead of surviving until someone notices in review.
+;
+;   run:  uv run lint-imports
+;
+; Layer direction (dependencies point INWARD only):
+;
+;       api  ->  application  ->  domain
+;        |            |
+;        +---> infrastructure --+
+;
+; `domain` is the innermost ring and may import nothing from the project.
+; ---------------------------------------------------------------------------
+
+[importlinter]
+root_packages =
+    app
+include_external_packages = True
+
+
+[importlinter:contract:layers]
+name = Clean Architecture layers (dependencies point inward)
+type = layers
+layers =
+    app.api
+    app.application
+    app.infrastructure
+    app.domain
+; `app.core` is intentionally absent: settings/logging/exceptions are shared
+; primitives that any layer may use, like the standard library.
+exhaustive = False
+
+
+[importlinter:contract:domain-purity]
+name = domain/ is pure - no framework, no ORM, no torch
+type = forbidden
+source_modules =
+    app.domain
+forbidden_modules =
+    fastapi
+    starlette
+    sqlalchemy
+    alembic
+    asyncpg
+    celery
+    redis
+    boto3
+    torch
+    torchvision
+    cv2
+    ai
+    app.api
+    app.infrastructure
+    app.application
+allow_indirect_imports = False
+
+
+[importlinter:contract:application-independence]
+name = application/ orchestrates domain, never infrastructure or api
+type = forbidden
+source_modules =
+    app.application
+forbidden_modules =
+    app.api
+    app.infrastructure
+    fastapi
+    sqlalchemy
+    torch
+allow_indirect_imports = False
+
+
+[importlinter:contract:no-torch-in-api]
+name = the API process never imports torch or opencv
+type = forbidden
+source_modules =
+    app.api
+forbidden_modules =
+    torch
+    torchvision
+    cv2
+    ultralytics
+; Rationale: torch is a worker-only dependency (ADR-011). If this contract
+; fails, the API image has just gained ~2 GB and a slow cold start.
+allow_indirect_imports = True

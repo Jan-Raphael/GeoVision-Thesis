@@ -1,0 +1,153 @@
+[project]
+name = "geovision-ai"
+version = "0.1.0"
+description = "GeoVision AI: OpenCV preprocessing, stage classification, detection, progress engine"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Jan Raphael Macabulos" }]
+
+# ---------------------------------------------------------------------------
+# This package is deliberately standalone: it must be trainable and runnable
+# with no backend present (`python -m ai.training.train_classifier`). The
+# backend depends on THIS package, never the reverse. See ADR-011.
+# ---------------------------------------------------------------------------
+dependencies = [
+    "torch>=2.5,<3",
+    "torchvision>=0.20,<1",
+    "opencv-python-headless>=4.10,<5", # headless: no GUI libs, smaller server image
+    "albumentations>=2.0,<3",
+    # Transitive pin, not a direct import. albumentations -> albucore ->
+    # stringzilla, and stringzilla 5.x publishes no cp311 Windows wheel, so it
+    # tries to compile from source and fails unless MSVC Build Tools are
+    # installed. 3.12.6 ships a wheel and is API-compatible for albucore's use.
+    # Revisit once stringzilla 5.x ships Windows wheels. See ADR-014.
+    "stringzilla<4",
+    "numpy>=1.26,<3",
+    "pillow>=11,<12",
+    "pyyaml>=6,<7",
+    "scikit-learn>=1.5,<2",
+    "matplotlib>=3.9,<4",
+    "tqdm>=4.66,<5",
+    "pandas>=2.2,<3",
+]
+
+[project.optional-dependencies]
+# Object detection. Kept optional so the progress engine and preprocessing can
+# be installed (and CI-tested) without pulling the full ultralytics stack.
+detect = ["ultralytics>=8.3,<9"]
+
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-cov>=6,<7",
+    "ruff>=0.9,<1",
+    "mypy>=1.14,<2",
+    "types-PyYAML>=6,<7",
+]
+
+[project.scripts]
+gv-train-classifier = "ai.training.train_classifier:main"
+gv-train-detector = "ai.training.train_detector:main"
+gv-evaluate = "ai.evaluation.run_all:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# src-layout: the package lives at `src/ai/`, so the import path is `ai.*` while
+# the working directory can never shadow the installed package. This is what
+# makes `uv run pytest` test the INSTALLED code rather than the source tree.
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai"]
+
+# ---------------------------------------------------------------------------
+# Torch resolution
+#
+# `pip install torch` defaults to the CUDA build: roughly 2.5 GB, and pointless
+# on a machine without an NVIDIA GPU or on a CI runner. We pin the CPU index by
+# default. To train on a local GPU, comment out the `[tool.uv.sources]` block
+# below and reinstall - the code itself already falls back with
+# `torch.cuda.is_available()`, so nothing else changes. See ADR-012.
+# ---------------------------------------------------------------------------
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+# ---------------------------------------------------------------------------
+# Linting / formatting - ruff replaces black + isort + flake8 (ADR-012)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["outputs", "dataset", "models"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", # pycodestyle
+    "F", # pyflakes
+    "I", # isort
+    "N", # pep8-naming
+    "UP", # pyupgrade
+    "B", # flake8-bugbear
+    "C4", # comprehensions
+    "SIM", # simplify
+    "PTH", # prefer pathlib
+    "NPY", # numpy-specific rules
+    "RUF", # ruff-specific
+    "D", # pydocstyle - docstrings are a project requirement
+]
+ignore = [
+    "D104", # missing docstring in public package (namespace __init__ files)
+    "D203", # conflicts with D211
+    "D213", # conflicts with D212
+    "E501", # line length is enforced by the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"] # tests document themselves through their names
+"**/__init__.py" = ["D104", "F401"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+
+# These ship without type stubs; do not fail the build over third-party gaps.
+[[tool.mypy.overrides]]
+module = ["cv2.*", "albumentations.*", "ultralytics.*", "sklearn.*", "matplotlib.*", "torchvision.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "slow: takes more than a few seconds",
+    "gpu: requires CUDA (skipped on CPU-only machines)",
+    "needs_weights: requires a trained checkpoint in models/",
+]
+filterwarnings = ["error::DeprecationWarning:ai.*"]
+
+[tool.coverage.run]
+source = ["ai"]
+omit = ["*/tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]

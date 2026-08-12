@@ -1,0 +1,64 @@
+# GeoVision — pre-commit hooks
+#   install once:  uv run pre-commit install
+#   run manually:  uv run pre-commit run --all-files
+#
+# Ruff replaces black + isort + flake8 (see ADR-012). One tool, one config.
+
+default_language_version:
+  python: python3.11
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.md$'          # markdown uses trailing spaces for line breaks
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-toml
+      - id: check-json
+        exclude: '^(dashboard/tsconfig.*\.json|\.vscode/)'   # these allow comments
+      - id: check-added-large-files
+        args: [--maxkb=1024]      # checkpoints and datasets must not enter git
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      - id: mypy
+        files: ^backend/app/
+        additional_dependencies:
+          - pydantic>=2.9
+          - pydantic-settings>=2.7
+        args: [--config-file=backend/pyproject.toml]
+
+  - repo: local
+    hooks:
+      # Architectural boundaries are a project constraint, not a style
+      # preference — so they are enforced on every commit, not in review.
+      - id: import-linter
+        name: import-linter (architecture boundaries)
+        entry: bash -c 'cd backend && lint-imports'
+        language: system
+        pass_filenames: false
+        files: ^backend/app/
+
+      # The "no TensorFlow" rule is load-bearing for this thesis. Check it
+      # here as well as in CI so a bad dependency never reaches a commit.
+      - id: no-tensorflow
+        name: assert TensorFlow/Keras absent
+        entry: python scripts/check_no_tensorflow.py
+        language: system
+        pass_filenames: false
+        files: '(pyproject\.toml|uv\.lock|requirements.*\.txt)$'

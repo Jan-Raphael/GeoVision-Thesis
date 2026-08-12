@@ -1,0 +1,48 @@
+# GeoVision — docker build context exclusions
+#
+# WHY: without this, `docker build` uploads dataset/, models/, outputs/ and
+# node_modules/ into the build context — gigabytes, on every single build.
+# Keeping the context small is the single biggest build-speed win available.
+
+# Version control & docs
+.git/
+.github/
+GeoVision-Vault/
+thesis/
+documentation/
+*.md
+!README.md
+
+# Large data & artifacts — never needed at image build time
+dataset/
+models/
+outputs/
+
+# Local environments
+.venv/
+venv/
+node_modules/
+dashboard/dist/
+.pio/
+
+# Caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets — belt and braces; these must never enter an image layer
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
