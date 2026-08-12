@@ -122,6 +122,10 @@ ignore = [
 "tests/**" = ["D", "S101", "S105", "S106"]   # asserts and fake creds are fine in tests
 "alembic/**" = ["D", "N999"]
 "**/__init__.py" = ["D104", "F401"]
+# CLI scripts talk to a human on stdout; S311 covers non-crypto randomness used
+# only to make seed data look realistic; S105/S106 are the obviously-fake
+# development credentials the seed writes (real ones come from .env).
+"scripts/**" = ["T201", "S311", "S105", "S106", "PLR0915"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -165,6 +169,13 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Both loop scopes must be "session" so async fixtures and the tests that use
+# them share one event loop. An asyncpg connection is bound to the loop that
+# created it, so a session-scoped engine used from a per-test loop fails with
+# "another operation is in progress" - which is exactly what happened before
+# these two lines existed.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 addopts = "-ra --strict-markers --strict-config"
 markers = [
     "unit: fast, no external services",

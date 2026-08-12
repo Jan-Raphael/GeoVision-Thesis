@@ -36,9 +36,9 @@ updated: 2026-08-13
 
 | # | Task | Blocks | Notes |
 |---|---|---|---|
-| P0-1 | **Get a PostgreSQL running** | Modules 02, 03, 04, 05, 09–15 | Two routes — see [[Local-Environment-Setup]]. *Native Windows installer* (~10 min, no Windows Update, no reboot) unblocks Modules 02–03 immediately. *Docker Desktop* (~1 h, needs Windows Update + WSL2 + 2 reboots) unblocks everything and matches production. |
+| ~~P0-1~~ | ~~Get a PostgreSQL running~~ | — | ✅ **done 2026-08-13.** PostgreSQL 16 installed natively at `F:\PostgreSQL\16`, port 5433, with `geovision` + `geovision_test` databases and all four extensions. Unblocked Modules 02–03. |
 | P0-2 | Update Windows to build 19045+ | Docker Desktop | Prerequisite for P0-3. Runs unattended — start it and walk away. |
-| P0-3 | Install Docker Desktop (WSL2) | Modules 05, 09, 14, 16 (Redis + Celery + full stack) | Not urgent *today* if you take the native-Postgres route, but required before Module 05. Guide: [[Local-Environment-Setup]] |
+| P0-3 | Install Docker Desktop (WSL2) | Modules 05, 09, 14, 16 — **Redis + MinIO + Celery** | Needed by **Module 05**, i.e. after Modules 03–04. Requires Windows Update first (P0-2). Guide: [[Local-Environment-Setup]] |
 
 **Not blocked by any of the above:** [[Module-06-AI-Preprocessing]] needs no services and no
 labelled data. If P0-1 will take a while, build Module 06 — it is correctly sequenced anyway
@@ -98,9 +98,9 @@ Authoritative board: [[Build-Order]].
 | | Module | Status | Blocked by |
 |---|---|---|---|
 | 01 | Foundation & Setup | ✅ done | — |
-| 02 | Database Schema | ▶ next | **P0-1** |
-| 03 | Auth & Users | pending | 02 |
-| 04 | Projects & Folders | pending | 03 + MinIO |
+| 02 | Database Schema | ✅ done | — |
+| 03 | Auth & Users | **▶ next — unblocked** | — |
+| 04 | Projects & Folders | pending | 03 (+ MinIO for asset upload) |
 | 05 | Device Pairing & Ingestion | pending | 04 + **Redis (P0-3)** |
 | 06 | AI Preprocessing | **available now** | — nothing |
 | 07 | Classifier Training | pending | **P1-3, P1-4** (dataset) |

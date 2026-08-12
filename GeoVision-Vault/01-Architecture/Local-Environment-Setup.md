@@ -18,6 +18,43 @@ Follow it in order; every phase ends with a command whose output tells you wheth
 
 ---
 
+## Alternative — native PostgreSQL, no Docker (what was actually done)
+
+Docker is required from **Module 05** onward (Redis, MinIO, the Celery worker). Modules 02–04
+need only PostgreSQL, which has a first-class Windows installer and no WSL2 dependency.
+
+Installed on 2026-08-13, entirely on `F:` to keep `C:` free:
+
+```powershell
+# Installer: https://www.enterprisedb.com/downloads/postgres-postgresql-downloads
+# Run elevated, unattended, everything on F:
+.\postgresql-16-x64.exe --mode unattended --unattendedmodeui minimal `
+  --prefix "F:\PostgreSQL\16" --datadir "F:\PostgreSQL\16\data" `
+  --serverport 5433 --superpassword <GV_POSTGRES_PASSWORD> `
+  --enable-components server,commandlinetools
+```
+
+Then create the role, databases, and extensions the Docker init scripts would have created:
+
+```powershell
+$env:PGPASSWORD = "<GV_POSTGRES_PASSWORD>"
+$psql = "F:\PostgreSQL\16\bin\psql.exe"
+& $psql -h localhost -p 5433 -U postgres -c "CREATE ROLE geovision LOGIN PASSWORD '<pw>' CREATEDB"
+& "F:\PostgreSQL\16\bin\createdb.exe" -h localhost -p 5433 -U postgres -O geovision geovision
+& "F:\PostgreSQL\16\bin\createdb.exe" -h localhost -p 5433 -U postgres -O geovision geovision_test
+foreach ($db in @('geovision','geovision_test')) {
+  & $psql -h localhost -p 5433 -U postgres -d $db -c "CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS citext; CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS btree_gin;"
+}
+```
+
+> Note the installer needs **elevation** (it creates a Windows service); a non-elevated run
+> unpacks files and then rolls back with exit code 1.
+
+Result: `GET /health/ready` reports `postgres: ok`, with `redis` and `object_storage` still
+`failed` until Docker arrives. That partial-readiness state is correct and expected.
+
+---
+
 ## Phase 0 — Pre-flight (5 min)
 
 Two things must be true before you download anything. Checking now avoids a failed install.
