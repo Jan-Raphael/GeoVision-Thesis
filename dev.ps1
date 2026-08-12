@@ -20,7 +20,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Root = $PSScriptRoot
-$Compose = @('compose', '-f', "$Root/docker/docker-compose.dev.yml")
+# --env-file is required, not optional: Compose resolves `.env` relative to the
+# compose file's directory (docker/), so without it the repo-root .env is never
+# read and every ${GV_*:?} variable fails the stack at startup.
+$Compose = @('compose', '--env-file', "$Root/.env", '-f', "$Root/docker/docker-compose.dev.yml")
 
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "  OK $msg" -ForegroundColor Green }

@@ -10,7 +10,12 @@
         lint fmt typecheck arch test test-unit test-integration test-ai cov \
         check guard clean nuke
 
-COMPOSE := docker compose -f docker/docker-compose.dev.yml
+# --env-file is required, not optional: Compose resolves `.env` relative to the
+# directory of the compose file (docker/), so without this it never finds the
+# repo-root .env and every ${GV_*:?} variable fails the stack at startup.
+# Note we do NOT pass --project-directory, because the relative bind mount
+# ./postgres/init must keep resolving against docker/.
+COMPOSE := docker compose --env-file .env -f docker/docker-compose.dev.yml
 
 ## ---------------------------------------------------------------------------
 ## Help

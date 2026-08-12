@@ -188,5 +188,7 @@ jobs:
       - name: Validate dev stack definition
         run: |
           cp .env.example .env
-          docker compose -f docker/docker-compose.dev.yml config --quiet
+          # --env-file mirrors how Makefile/dev.ps1 invoke compose; without it
+          # Compose looks for docker/.env and the required variables resolve empty.
+          docker compose --env-file .env -f docker/docker-compose.dev.yml config --quiet
           echo "compose file is valid"

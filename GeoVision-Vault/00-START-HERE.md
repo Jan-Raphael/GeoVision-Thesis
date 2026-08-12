@@ -43,7 +43,7 @@ updated: 2026-08-12
 
 | Folder | Contains |
 |---|---|
-| `01-Architecture/` | [[Master-Architecture]], [[Repository-Structure]], [[Tech-Stack]], [[Naming-Conventions]] |
+| `01-Architecture/` | [[Master-Architecture]], [[Repository-Structure]], [[Tech-Stack]], [[Naming-Conventions]], [[Local-Environment-Setup]] |
 | `02-Domain/` | [[Domain-Model]], [[Roles-and-Permissions]], [[Construction-Stages]], [[Progress-Calculation]], [[Project-Status-Rules]] |
 | `03-Modules/` | One build-spec note per module — see [[Build-Order]] |
 | `04-API/` | [[API-Contract]], [[Realtime-Events]] |

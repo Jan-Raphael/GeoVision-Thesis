@@ -12,6 +12,11 @@ updated: 2026-08-12
 Every table in [[Domain-Model]], the SQLAlchemy layer, the repository interfaces, and seed
 data. **No HTTP endpoints in this module.**
 
+> **Prerequisite:** a running PostgreSQL. Follow [[Local-Environment-Setup]] first and confirm
+> `GET /health/ready` returns `200 {"status":"ready"}`. The Alembic scaffold, async `env.py`,
+> and the `pgcrypto`/`citext`/`pg_trgm` extensions are already in place from Module 01, so
+> this module writes revisions rather than plumbing.
+
 ## Deliverables
 - `domain/enums.py` — every enum from [[Domain-Model]], as `StrEnum`. Single definition site.
 - `domain/entities/` — frozen dataclasses (`User`, `Project`, `Device`, `Image`,
