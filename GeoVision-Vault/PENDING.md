@@ -70,7 +70,7 @@ path of the thesis.**
 
 | # | Task | Owner module |
 |---|---|---|
-| P2-1 | Modules 02 → 16 built and tested | [[Build-Order]] |
+| P2-1 | Modules 04 → 16 built and tested | [[Build-Order]] |
 | P2-2 | Decide where trained checkpoints live (Q10) — Release assets / Drive + hash / git-lfs | [[Module-07-Classifier-Training]] |
 | P2-3 | Verify the ESP32 pinout for *your* board revision (Q2) and record it | [[ESP32-CAM-Node]] |
 | P2-4 | Decide the public server host + HTTPS endpoint for the field device (Q4) — Cloudflare Tunnel is the cheap answer | [[Module-16-Deployment]] |
@@ -99,8 +99,8 @@ Authoritative board: [[Build-Order]].
 |---|---|---|---|
 | 01 | Foundation & Setup | ✅ done | — |
 | 02 | Database Schema | ✅ done | — |
-| 03 | Auth & Users | **▶ next — unblocked** | — |
-| 04 | Projects & Folders | pending | 03 (+ MinIO for asset upload) |
+| 03 | Auth & Users | ✅ done | — |
+| 04 | Projects & Folders | **▶ next** | MinIO needed for asset upload (**P0-3**); everything else is unblocked |
 | 05 | Device Pairing & Ingestion | pending | 04 + **Redis (P0-3)** |
 | 06 | AI Preprocessing | **available now** | — nothing |
 | 07 | Classifier Training | pending | **P1-3, P1-4** (dataset) |

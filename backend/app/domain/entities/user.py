@@ -54,6 +54,17 @@ class User:
         """
         if not self.is_public:
             return PublicProfile(username=self.username, is_private=True)
+        return self.to_full_profile()
+
+    def to_full_profile(self) -> PublicProfile:
+        """The unredacted profile shape, regardless of the visibility setting.
+
+        Used only when the viewer is entitled to the full view — currently just
+        the account's owner looking at their own profile. Kept as a separate,
+        explicitly named method so that redaction stays the default: a caller
+        has to *ask* for the unredacted form, rather than getting it by
+        forgetting to check.
+        """
         return PublicProfile(
             username=self.username,
             is_private=False,

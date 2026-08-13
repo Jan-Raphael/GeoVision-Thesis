@@ -210,6 +210,19 @@ class SqlAlchemyRefreshTokenRepository:
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return to_refresh_token(row) if row else None
 
+    async def revoke(self, token_id: UUID, *, revoked_at: datetime) -> bool:
+        """Revoke a single token — used to burn the old one on rotation."""
+        stmt = (
+            update(models.RefreshTokenModel)
+            .where(
+                models.RefreshTokenModel.id == token_id,
+                models.RefreshTokenModel.revoked_at.is_(None),
+            )
+            .values(revoked_at=revoked_at)
+        )
+        result = await self._session.execute(stmt)
+        return bool(affected_rows(result))
+
     async def revoke_family(self, family_id: UUID) -> int:
         """Revoke every unrevoked token in a family.
 

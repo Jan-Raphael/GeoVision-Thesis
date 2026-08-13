@@ -13,14 +13,19 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
+from app.api.error_handlers import build_error_response, register_exception_handlers
 from app.core.config import Settings, get_settings
-from app.core.exceptions import register_exception_handlers
 from app.core.logging import RequestIDMiddleware, configure_logging
+from app.core.rate_limit import get_limiter
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -38,6 +43,21 @@ serves it to a public site and an authenticated owner dashboard.
 
 Design documentation lives in the project's Obsidian vault (`GeoVision-Vault/`).
 """
+
+
+async def _rate_limit_handler(_: Request, exc: Exception) -> JSONResponse:
+    """Render an exceeded rate limit in the project's standard error envelope.
+
+    slowapi's default response is a bare string, which would be the only
+    endpoint in the API not returning ``{"error": {...}}``.
+    """
+    detail = getattr(exc, "detail", "rate limit exceeded")
+    return build_error_response(
+        HTTPStatus.TOO_MANY_REQUESTS,
+        "RATE_LIMITED",
+        "Too many requests. Please slow down and try again shortly.",
+        {"limit": str(detail)},
+    )
 
 
 def _build_lifespan(
@@ -100,6 +120,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(RequestIDMiddleware)
 
+    # Rate limiting. slowapi stores the limiter on app.state and needs its own
+    # exception handler; without the handler an exceeded limit surfaces as a
+    # 500 instead of a 429.
+    limiter = get_limiter()
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+    app.add_middleware(SlowAPIMiddleware)
+
     # Bind the *injected* settings to the DI graph. Without this, routes calling
     # `Depends(get_settings)` would silently read the cached process-wide
     # settings instead, so `create_app(custom_settings)` would configure the app
@@ -120,18 +148,21 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
     not move when the API version changes. Everything else lives under
     ``/api/v1`` - see ``GeoVision-Vault/04-API/API-Contract.md``.
     """
-    from app.api.v1.routers import health
+    from app.api.v1.routers import auth, health, public_users, users
 
     app.include_router(health.router)
 
+    prefix = settings.api_v1_prefix
+    app.include_router(auth.router, prefix=prefix)
+    app.include_router(users.router, prefix=prefix)
+    app.include_router(public_users.router, prefix=prefix)
+
     # Mounted as the corresponding modules land:
-    #   Module 03  auth, users, public_users
-    #   Module 04  projects, members, assets, remarks, public, search, contact
+    #   Module 04  projects, members, assets, remarks, public feed, search, contact
     #   Module 05  pairing, ingest, devices
     #   Module 09  predictions, progress, models
     #   Module 10  reports
     #   Module 14  ws
-    _ = settings.api_v1_prefix
 
 
 app = create_app()

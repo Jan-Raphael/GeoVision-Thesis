@@ -81,6 +81,25 @@ class Settings(BaseSettings):
         default_factory=lambda: ["http://localhost:5173"]
     )
 
+    # Argon2id cost. Defaults follow the OWASP recommendation; raising them
+    # later is safe because `needs_rehash` transparently upgrades stored hashes
+    # on the next successful login. Tests override these downward - a 19 MiB
+    # hash per login makes a test suite crawl.
+    argon2_memory_cost: int = Field(default=19456, ge=8)  # KiB
+    argon2_time_cost: int = Field(default=2, ge=1)
+    argon2_parallelism: int = Field(default=1, ge=1)
+
+    # -- Rate limiting ------------------------------------------------------
+    # "memory://" needs no extra services, which is what we have until Docker
+    # lands. Switch to "redis://localhost:6379/1" for a limit shared across API
+    # workers: an in-memory limiter counts per process, so N workers silently
+    # allow N times the intended rate.
+    rate_limit_enabled: bool = True
+    rate_limit_storage_uri: str = "memory://"
+    login_rate_limit: str = "5/minute"
+    register_rate_limit: str = "3/hour"
+    search_rate_limit: str = "30/minute"
+
     # -- Database -----------------------------------------------------------
     postgres_host: str = "localhost"
     # 5433 by default: Windows dev machines commonly already run PostgreSQL on

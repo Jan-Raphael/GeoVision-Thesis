@@ -74,8 +74,8 @@ flowchart LR
 |---|---|---|---|---|
 | 01 | ✅ **done** | 2026-08-13 | 2026-08-13 | Audited before building; ADR-011…014 recorded. 59 tests green, 4 import contracts kept. Docker Desktop still to install (Q9). |
 | 02 | ✅ **done** | 2026-08-13 | 2026-08-13 | 18 tables, 14 repositories, reversible migration. 198 tests. Built on native PostgreSQL (no Docker yet). |
-| 03 | ▶ **next** | | | |
-| 04 | planned | | | |
+| 03 | ✅ **done** | 2026-08-13 | 2026-08-13 | Auth, profiles, permission matrix, per-account throttling. 327 tests. Audit found 4 security gaps; all fixed. Avatar upload deferred to M04. |
+| 04 | ▶ **next** | | | Needs MinIO for asset upload (P0-3) |
 | 05 | planned | | | |
 | 06 | planned | | | |
 | 07 | planned | | | |

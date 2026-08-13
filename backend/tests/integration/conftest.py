@@ -15,6 +15,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import Settings, get_settings
@@ -29,9 +31,26 @@ TEST_DATABASE = "geovision_test"
 
 
 def _test_settings() -> Settings:
-    """Settings pointed at the test database."""
+    """Settings pointed at the test database.
+
+    Argon2 is dialled right down and rate limiting is off. Both are deliberate:
+    production Argon2 parameters cost ~50 ms per hash, which would add minutes
+    to a suite that registers users constantly, and a 3/hour registration limit
+    would fail every test after the third.
+
+    The limiter is exercised by its own dedicated test, which switches it back on.
+    """
     base = get_settings()
-    return base.model_copy(update={"postgres_db": TEST_DATABASE, "db_echo": False})
+    return base.model_copy(
+        update={
+            "postgres_db": TEST_DATABASE,
+            "db_echo": False,
+            "argon2_memory_cost": 64,
+            "argon2_time_cost": 1,
+            "argon2_parallelism": 1,
+            "rate_limit_enabled": False,
+        }
+    )
 
 
 @pytest.fixture(scope="session")
@@ -79,3 +98,37 @@ async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
         if transaction.is_active:
             await transaction.rollback()
         await connection.close()
+
+
+@pytest.fixture
+async def app(session: AsyncSession, test_settings: Settings) -> AsyncIterator[FastAPI]:
+    """An application wired to the test database.
+
+    ``get_session`` is overridden to yield the test transaction, so anything a
+    request writes is rolled back with the test and never touches the
+    development database.
+    """
+    from app.infrastructure.db.session import get_session
+    from app.main import create_app
+
+    application = create_app(test_settings)
+    # The limiter is a module-level singleton built from the *global* settings
+    # at import time, so `rate_limit_enabled=False` in test settings cannot
+    # reach it. Disable it directly, otherwise the 3/hour registration limit
+    # fails every test after the third.
+    application.state.limiter.enabled = False
+
+    async def _override() -> AsyncIterator[AsyncSession]:
+        yield session
+
+    application.dependency_overrides[get_session] = _override
+    yield application
+    application.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
+    """HTTP client bound to the test application (no network, no port)."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as http:
+        yield http

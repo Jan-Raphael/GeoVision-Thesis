@@ -216,6 +216,47 @@ be written against the 2.x API.
 **Rejected.** Requiring MSVC Build Tools (a real barrier for a thesis project); staying on
 albumentations 1.x (same stringzilla dependency, and an unmaintained line).
 
+## ADR-015 — Access and refresh tokens are not interchangeable
+**Status:** Accepted 2026-08-13
+**Context.** The Module 03 spec described short access tokens and long rotating refresh
+tokens, but nothing distinguished them once signed. A refresh token presented in an
+`Authorization: Bearer` header would have authenticated normally.
+**Decision.** Every token carries a `typ` claim; `verify_token` demands the expected type and
+raises otherwise. Refresh tokens are additionally *opaque random strings*, not JWTs, since
+they are looked up in the database on every use anyway.
+**Consequences.** A stolen refresh token cannot be used as an access token, so the 15-minute
+access lifetime actually bounds an attacker's window. Cost: one extra claim and one check.
+**Rejected.** Separate signing keys per token type — equivalent security, more key material
+to manage and rotate.
+
+## ADR-016 — Two independent throttles on login
+**Status:** Accepted 2026-08-13
+**Context.** The spec called for per-IP rate limiting on `/auth/login`. That stops one host
+hammering the endpoint but is bypassed by an attacker with many source addresses, which is
+exactly how credential stuffing works. An attempt to key slowapi on the login identifier
+failed for a structural reason: its key function runs *before* the endpoint, so the request
+body is not yet available.
+**Decision.** Keep the per-IP limiter, and add a separate per-account **failed-attempt**
+throttle inside the use case, where the identifier exists. Only failures count; success
+clears the counter. Keys are hashed, so identifiers never enter the store.
+**Consequences.** Single-account attacks are throttled wherever they originate, and a
+legitimate user is never limited for logging in correctly. Cost: two mechanisms to
+understand. The in-memory backend counts per process, so several API workers multiply the
+allowance — replaced by an atomic Redis counter in Module 05.
+**Rejected.** Per-IP only (bypassable); account lockout on failure (a denial-of-service
+against any known username).
+
+## ADR-017 — Exception types are framework-free; HTTP rendering is not
+**Status:** Accepted 2026-08-13
+**Context.** `core/exceptions.py` held both the `DomainError` hierarchy and the FastAPI
+handlers. Because use cases raise those types, the **application layer transitively imported
+the web framework** — caught by the `application-independence` contract in
+`backend/.importlinter`.
+**Decision.** Types stay in `core/exceptions.py` with `http.HTTPStatus` for status codes;
+handler registration moves to `api/error_handlers.py`.
+**Consequences.** Use cases stay testable without FastAPI, and the layering contract passes.
+Cost: one more file. Worth noting this was found by an automated check, not review.
+
 ---
 
 ## Template

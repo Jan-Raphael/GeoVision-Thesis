@@ -118,6 +118,14 @@ class UserRepository(Protocol):
         """
         ...
 
+    async def set_password_hash(self, user_id: UUID, password_hash: str) -> None:
+        """Replace the stored password hash.
+
+        Used to transparently upgrade a hash made with weaker Argon2
+        parameters, so raising the cost never forces a password reset.
+        """
+        ...
+
 
 class RefreshTokenRepository(Protocol):
     """Rotating refresh tokens."""
@@ -128,6 +136,10 @@ class RefreshTokenRepository(Protocol):
 
     async def get_by_hash(self, token_hash: str) -> RefreshToken | None:
         """Look up a token by its hash."""
+        ...
+
+    async def revoke(self, token_id: UUID, *, revoked_at: datetime) -> bool:
+        """Revoke a single token. Used to burn a token on rotation."""
         ...
 
     async def revoke_family(self, family_id: UUID) -> int:
