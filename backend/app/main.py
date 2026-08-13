@@ -148,7 +148,16 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
     not move when the API version changes. Everything else lives under
     ``/api/v1`` - see ``GeoVision-Vault/04-API/API-Contract.md``.
     """
-    from app.api.v1.routers import auth, health, public_users, users
+    from app.api.v1.routers import (
+        auth,
+        content,
+        health,
+        members,
+        projects,
+        public,
+        public_users,
+        users,
+    )
 
     app.include_router(health.router)
 
@@ -156,9 +165,12 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(auth.router, prefix=prefix)
     app.include_router(users.router, prefix=prefix)
     app.include_router(public_users.router, prefix=prefix)
+    app.include_router(projects.router, prefix=prefix)
+    app.include_router(members.router, prefix=prefix)
+    app.include_router(content.router, prefix=prefix)
+    app.include_router(public.router, prefix=prefix)
 
     # Mounted as the corresponding modules land:
-    #   Module 04  projects, members, assets, remarks, public feed, search, contact
     #   Module 05  pairing, ingest, devices
     #   Module 09  predictions, progress, models
     #   Module 10  reports

@@ -257,6 +257,40 @@ handler registration moves to `api/error_handlers.py`.
 **Consequences.** Use cases stay testable without FastAPI, and the layering contract passes.
 Cost: one more file. Worth noting this was found by an automated check, not review.
 
+## ADR-018 - Object storage behind a port, with a local backend for development
+**Status:** Accepted 2026-08-13
+**Context.** Module 04 needs somewhere to put uploaded blueprints, but Docker (and therefore
+MinIO) was not yet installed. The options were to stub the upload, block the module, or
+abstract the dependency.
+**Decision.** Define an `ObjectStorage` port in the application layer with two
+implementations: `LocalObjectStorage` (filesystem) and `S3ObjectStorage` (MinIO/S3). The
+backend is chosen by `GV_STORAGE_BACKEND`; a deployed environment may not choose `local`,
+enforced by a settings validator.
+**Consequences.** Module 04 ships complete today, the test suite needs no object store, and
+**Modules 05 and 10 inherit both backends for free** because they depend on the same port.
+Development and production differ in one documented way: the local backend cannot issue
+genuinely pre-signed URLs, so the asset download route re-checks permission rather than
+trusting the URL - which is the safer behaviour under either backend anyway. Cost: two
+implementations to keep in step, and a real risk of a "works locally" gap if the S3 path is
+not exercised. It is exercised as soon as Docker lands.
+**Rejected.** Waiting for Docker (blocks a module for an unrelated reason); storing blobs in
+PostgreSQL (contradicts ADR-005); a filesystem-only design (unshippable).
+
+## ADR-019 - The public view is a separate response model, not a filtered one
+**Status:** Accepted 2026-08-13
+**Context.** A project folder has both public fields (progress, timeline, location) and
+private ones (members, devices, worker counts, inspection notes). The obvious approach is to
+serialise the internal model and drop the private keys.
+**Decision.** Anonymous callers get `PublicProjectResponse`, a distinct model that simply has
+no fields for the private data. The same pattern already applies to `PublicProfile` in
+Module 03.
+**Consequences.** A field added to the internal model later cannot leak, because there is
+nowhere for it to go - the failure mode changes from "somebody forgot a line" to "somebody
+has to deliberately add a field to the public model". Cost: two models to maintain, and they
+can drift in the *harmless* direction (public missing something it could show).
+**Rejected.** Filtering a shared model with an exclude-list - one forgotten entry is a
+privacy breach, and nothing fails loudly when it happens.
+
 ---
 
 ## Template

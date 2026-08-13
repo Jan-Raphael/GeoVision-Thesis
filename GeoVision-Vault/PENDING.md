@@ -38,7 +38,7 @@ updated: 2026-08-13
 |---|---|---|---|
 | ~~P0-1~~ | ~~Get a PostgreSQL running~~ | — | ✅ **done 2026-08-13.** PostgreSQL 16 installed natively at `F:\PostgreSQL\16`, port 5433, with `geovision` + `geovision_test` databases and all four extensions. Unblocked Modules 02–03. |
 | P0-2 | Update Windows to build 19045+ | Docker Desktop | Prerequisite for P0-3. Runs unattended — start it and walk away. |
-| P0-3 | Install Docker Desktop (WSL2) | Modules 05, 09, 14, 16 — **Redis + MinIO + Celery** | Needed by **Module 05**, i.e. after Modules 03–04. Requires Windows Update first (P0-2). Guide: [[Local-Environment-Setup]] |
+| P0-3 | Install Docker Desktop (WSL2) | Modules 05, 09, 14, 16 — **Redis + Celery** | **Now blocking.** Module 05 needs Redis for the HMAC replay-nonce cache. MinIO is no longer required to proceed (ADR-018 gave storage a local backend), but Redis has no equivalent. Requires Windows Update first (P0-2). Guide: [[Local-Environment-Setup]] |
 
 **Not blocked by any of the above:** [[Module-06-AI-Preprocessing]] needs no services and no
 labelled data. If P0-1 will take a while, build Module 06 — it is correctly sequenced anyway
@@ -70,7 +70,7 @@ path of the thesis.**
 
 | # | Task | Owner module |
 |---|---|---|
-| P2-1 | Modules 04 → 16 built and tested | [[Build-Order]] |
+| P2-1 | Modules 05 → 16 built and tested | [[Build-Order]] |
 | P2-2 | Decide where trained checkpoints live (Q10) — Release assets / Drive + hash / git-lfs | [[Module-07-Classifier-Training]] |
 | P2-3 | Verify the ESP32 pinout for *your* board revision (Q2) and record it | [[ESP32-CAM-Node]] |
 | P2-4 | Decide the public server host + HTTPS endpoint for the field device (Q4) — Cloudflare Tunnel is the cheap answer | [[Module-16-Deployment]] |
@@ -100,8 +100,8 @@ Authoritative board: [[Build-Order]].
 | 01 | Foundation & Setup | ✅ done | — |
 | 02 | Database Schema | ✅ done | — |
 | 03 | Auth & Users | ✅ done | — |
-| 04 | Projects & Folders | **▶ next** | MinIO needed for asset upload (**P0-3**); everything else is unblocked |
-| 05 | Device Pairing & Ingestion | pending | 04 + **Redis (P0-3)** |
+| 04 | Projects & Folders | ✅ done | — |
+| 05 | Device Pairing & Ingestion | **▶ next** | **Redis** for the HMAC nonce cache (**P0-3**). Storage is already solved (ADR-018). |
 | 06 | AI Preprocessing | **available now** | — nothing |
 | 07 | Classifier Training | pending | **P1-3, P1-4** (dataset) |
 | 08 | YOLO Detection | pending | P1-3, P1-4 |

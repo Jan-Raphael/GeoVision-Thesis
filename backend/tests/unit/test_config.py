@@ -16,6 +16,9 @@ def _base(**overrides: object) -> Settings:
         "jwt_secret_key": "a" * 64,
         "postgres_password": "b" * 32,
         "s3_secret_key": "c" * 32,
+        # Filesystem storage is refused in deployed environments, so a valid
+        # production Settings must name a real backend.
+        "storage_backend": "s3",
     }
     values.update(overrides)
     return Settings(**values)  # type: ignore[arg-type]
@@ -119,3 +122,23 @@ class TestSecretsAreNotLeaked:
     def test_secret_absent_from_repr(self, field: str) -> None:
         settings = _base()
         assert getattr(settings, field) not in repr(settings)
+
+
+class TestStoragePolicy:
+    """Filesystem storage is a development convenience, not a deployment option."""
+
+    def test_local_storage_is_refused_in_production(self) -> None:
+        """It has no replication, no lifecycle rules, and no real signed URLs.
+
+        Acceptable while a laptop is the whole system; not acceptable when it
+        holds a project's only copy of its site imagery.
+        """
+        with pytest.raises(ValidationError, match="not permitted"):
+            _base(storage_backend="local")
+
+    def test_s3_is_accepted_in_production(self) -> None:
+        assert _base(storage_backend="s3").storage_backend == "s3"
+
+    def test_local_is_the_default_for_development(self) -> None:
+        """So the project runs with no object store installed."""
+        assert Settings().storage_backend == "local"

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from app.domain.entities import (
     AIModel,
     CaptureSchedule,
+    ContactMessage,
     Device,
     Image,
     Notification,
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "to_ai_model",
+    "to_contact_message",
     "to_device",
     "to_image",
     "to_notification",
@@ -347,5 +349,20 @@ def to_notification(row: models.NotificationModel) -> Notification:
         body=row.body,
         project_id=row.project_id,
         read_at=row.read_at,
+        created_at=row.created_at,
+    )
+
+
+def to_contact_message(row: models.ContactMessageModel) -> ContactMessage:
+    """Map a ``contact_messages`` row."""
+    return ContactMessage(
+        id=row.id,
+        name=row.name,
+        email=row.email,
+        subject=row.subject,
+        message=row.message,
+        ip_address=row.ip_address,
+        user_agent=row.user_agent,
+        handled_at=row.handled_at,
         created_at=row.created_at,
     )

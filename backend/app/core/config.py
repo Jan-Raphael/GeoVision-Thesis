@@ -118,6 +118,12 @@ class Settings(BaseSettings):
     redis_db: int = 0
 
     # -- Object storage -----------------------------------------------------
+    # "local" writes to disk and needs no extra services, which is what makes
+    # Module 04 shippable before Docker/MinIO exists. "s3" is the real backend.
+    # A deployed environment may not use "local" - enforced below.
+    storage_backend: Literal["local", "s3"] = "local"
+    local_storage_path: Path = REPO_ROOT / "outputs" / "storage"
+
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key: str = Field(default="", repr=False)
     s3_secret_key: str = Field(default="", repr=False)
@@ -205,6 +211,15 @@ class Settings(BaseSettings):
                 raise ValueError(msg)
             if self.debug:
                 msg = f"GV_DEBUG must be false in '{self.environment}'"
+                raise ValueError(msg)
+            if self.storage_backend == "local":
+                # Filesystem storage has no replication, no lifecycle rules, and
+                # no real signed URLs. Fine for development, never for a
+                # deployment holding a project's only copy of its site imagery.
+                msg = (
+                    f"GV_STORAGE_BACKEND='local' is not permitted in "
+                    f"'{self.environment}'; use 's3'."
+                )
                 raise ValueError(msg)
         elif not self.jwt_secret_key:
             # Ephemeral, per-process key: tokens do not survive a restart, which

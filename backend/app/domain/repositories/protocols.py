@@ -20,6 +20,7 @@ from uuid import UUID
 
 from app.domain.entities import (
     AIModel,
+    ContactMessage,
     Device,
     Image,
     Notification,
@@ -46,6 +47,7 @@ from app.domain.value_objects import ProjectCode
 
 __all__ = [
     "AIModelRepository",
+    "ContactMessageRepository",
     "DeviceRepository",
     "ImageRepository",
     "NotificationRepository",
@@ -556,4 +558,16 @@ class NotificationRepository(Protocol):
 
     async def mark_read(self, notification_id: UUID, read_at: datetime) -> bool:
         """Mark one notification read."""
+        ...
+
+
+class ContactMessageRepository(Protocol):
+    """Messages from the public Contact Us form."""
+
+    async def add(self, message: ContactMessage) -> ContactMessage:
+        """Store a submitted message."""
+        ...
+
+    async def list_unhandled(self, *, limit: int = 50) -> tuple[ContactMessage, ...]:
+        """Messages nobody has dealt with yet, oldest first."""
         ...

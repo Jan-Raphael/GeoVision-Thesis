@@ -25,6 +25,7 @@ from fastapi import Depends, Path, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.ports.storage import ObjectStorage
 from app.core.clock import SYSTEM_CLOCK, Clock
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ForbiddenError, NotFoundError, UnauthenticatedError
@@ -36,6 +37,7 @@ from app.infrastructure.audit import AuditLogger
 from app.infrastructure.db.session import get_session
 from app.infrastructure.repositories import (
     SqlAlchemyAIModelRepository,
+    SqlAlchemyContactMessageRepository,
     SqlAlchemyDeviceRepository,
     SqlAlchemyImageRepository,
     SqlAlchemyNotificationRepository,
@@ -50,6 +52,7 @@ from app.infrastructure.repositories import (
     SqlAlchemySnapshotRepository,
     SqlAlchemyUserRepository,
 )
+from app.infrastructure.storage import get_storage
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
@@ -61,6 +64,7 @@ __all__ = [
     "OptionalUser",
     "SessionDep",
     "SettingsDep",
+    "StorageDep",
     "get_client_ip",
     "require_permission",
 ]
@@ -159,6 +163,21 @@ def get_notification_repository(session: SessionDep) -> SqlAlchemyNotificationRe
     return SqlAlchemyNotificationRepository(session)
 
 
+def get_contact_repository(session: SessionDep) -> SqlAlchemyContactMessageRepository:
+    """Provide the contact-message repository."""
+    return SqlAlchemyContactMessageRepository(session)
+
+
+def get_object_storage(settings: SettingsDep) -> ObjectStorage:
+    """Provide the configured object storage backend.
+
+    Local filesystem or S3 depending on ``GV_STORAGE_BACKEND`` - the use cases
+    that consume it only know the port, so Module 05's image ingest and Module
+    10's report writer inherit both backends for free.
+    """
+    return get_storage(settings)
+
+
 def get_audit_logger(session: SessionDep) -> AuditLogger:
     """Provide the audit logger."""
     return AuditLogger(session)
@@ -184,6 +203,8 @@ ModelRepoDep = Annotated[SqlAlchemyAIModelRepository, Depends(get_model_reposito
 NotificationRepoDep = Annotated[
     SqlAlchemyNotificationRepository, Depends(get_notification_repository)
 ]
+ContactRepoDep = Annotated[SqlAlchemyContactMessageRepository, Depends(get_contact_repository)]
+StorageDep = Annotated[ObjectStorage, Depends(get_object_storage)]
 AuditDep = Annotated[AuditLogger, Depends(get_audit_logger)]
 
 

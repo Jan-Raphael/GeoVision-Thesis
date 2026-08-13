@@ -853,6 +853,36 @@ class NotificationModel(Base):
     __table_args__ = (Index("ix_notifications_user_id_read_at", "user_id", "read_at"),)
 
 
+class ContactMessageModel(Base):
+    """A message from the public Contact Us form.
+
+    Persisted rather than emailed: v1 has no mail delivery (see
+    ``Open-Questions``), and a contact form that drops messages on the floor is
+    a broken feature, not a deferred one. The owner reads them from the
+    database until delivery exists.
+    """
+
+    __tablename__ = "contact_messages"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    email: Mapped[str] = mapped_column(String(254), nullable=False)
+    subject: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    # Recorded for abuse triage; the form is public and rate-limited.
+    ip_address: Mapped[str | None] = mapped_column(String(64))
+    user_agent: Mapped[str | None] = mapped_column(String(256))
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    __table_args__ = (
+        CheckConstraint("char_length(message) >= 10", name="message_min_length"),
+        Index("ix_contact_messages_created_at_handled_at", "created_at", "handled_at"),
+    )
+
+
 class AuditLogModel(Base):
     """A security-relevant action, retained for accountability."""
 

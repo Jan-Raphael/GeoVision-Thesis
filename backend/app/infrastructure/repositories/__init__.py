@@ -24,6 +24,7 @@ from app.infrastructure.repositories.member import SqlAlchemyProjectMemberReposi
 from app.infrastructure.repositories.project import SqlAlchemyProjectRepository
 from app.infrastructure.repositories.system import (
     SqlAlchemyAIModelRepository,
+    SqlAlchemyContactMessageRepository,
     SqlAlchemyNotificationRepository,
     SqlAlchemyReferenceAssetRepository,
     SqlAlchemyRemarkRepository,
@@ -36,6 +37,7 @@ from app.infrastructure.repositories.user import (
 
 __all__ = [
     "SqlAlchemyAIModelRepository",
+    "SqlAlchemyContactMessageRepository",
     "SqlAlchemyDeviceRepository",
     "SqlAlchemyImageRepository",
     "SqlAlchemyNotificationRepository",

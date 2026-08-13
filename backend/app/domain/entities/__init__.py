@@ -40,7 +40,13 @@ from app.domain.entities.project import (
     Remark,
     StageBreakdown,
 )
-from app.domain.entities.system import AIModel, AuditLog, Notification, Report
+from app.domain.entities.system import (
+    AIModel,
+    AuditLog,
+    ContactMessage,
+    Notification,
+    Report,
+)
 from app.domain.entities.user import PublicProfile, RefreshToken, User
 
 __all__ = [
@@ -48,6 +54,7 @@ __all__ = [
     "AuditLog",
     "BoundingBox",
     "CaptureSchedule",
+    "ContactMessage",
     "Detection",
     "DetectionSummary",
     "Device",

@@ -10,6 +10,7 @@ from sqlalchemy import func, select, update
 
 from app.domain.entities import (
     AIModel,
+    ContactMessage,
     Notification,
     ReferenceAsset,
     Remark,
@@ -20,6 +21,7 @@ from app.infrastructure.db import models
 from app.infrastructure.repositories._result import affected_rows
 from app.infrastructure.repositories.mappers import (
     to_ai_model,
+    to_contact_message,
     to_notification,
     to_reference_asset,
     to_remark,
@@ -31,6 +33,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "SqlAlchemyAIModelRepository",
+    "SqlAlchemyContactMessageRepository",
     "SqlAlchemyNotificationRepository",
     "SqlAlchemyReferenceAssetRepository",
     "SqlAlchemyRemarkRepository",
@@ -368,3 +371,38 @@ class SqlAlchemyNotificationRepository:
         )
         result = await self._session.execute(stmt)
         return bool(affected_rows(result))
+
+
+class SqlAlchemyContactMessageRepository:
+    """Public Contact Us submissions."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Bind the repository to a request-scoped session."""
+        self._session = session
+
+    async def add(self, message: ContactMessage) -> ContactMessage:
+        """Store a submitted message."""
+        row = models.ContactMessageModel(
+            id=message.id,
+            name=message.name,
+            email=message.email,
+            subject=message.subject,
+            message=message.message,
+            ip_address=message.ip_address,
+            user_agent=message.user_agent,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        await self._session.refresh(row)
+        return to_contact_message(row)
+
+    async def list_unhandled(self, *, limit: int = 50) -> tuple[ContactMessage, ...]:
+        """Messages nobody has dealt with yet, oldest first."""
+        stmt = (
+            select(models.ContactMessageModel)
+            .where(models.ContactMessageModel.handled_at.is_(None))
+            .order_by(models.ContactMessageModel.created_at)
+            .limit(limit)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return tuple(to_contact_message(row) for row in rows)

@@ -12,6 +12,8 @@ schema between them.
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -49,6 +51,8 @@ def _test_settings() -> Settings:
             "argon2_time_cost": 1,
             "argon2_parallelism": 1,
             "rate_limit_enabled": False,
+            "storage_backend": "local",
+            "local_storage_path": Path(tempfile.gettempdir()) / "geovision-test-storage",
         }
     )
 
@@ -109,8 +113,10 @@ async def app(session: AsyncSession, test_settings: Settings) -> AsyncIterator[F
     development database.
     """
     from app.infrastructure.db.session import get_session
+    from app.infrastructure.storage import reset_storage
     from app.main import create_app
 
+    reset_storage()
     application = create_app(test_settings)
     # The limiter is a module-level singleton built from the *global* settings
     # at import time, so `rate_limit_enabled=False` in test settings cannot

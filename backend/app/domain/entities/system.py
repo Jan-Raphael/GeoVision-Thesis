@@ -14,7 +14,7 @@ from app.domain.enums import (
     ReportStatus,
 )
 
-__all__ = ["AIModel", "AuditLog", "Notification", "Report"]
+__all__ = ["AIModel", "AuditLog", "ContactMessage", "Notification", "Report"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,3 +127,27 @@ class AuditLog:
     metadata: dict[str, object] = field(default_factory=dict)
     ip_address: str | None = None
     created_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ContactMessage:
+    """A message from the public Contact Us form.
+
+    Persisted rather than emailed: v1 has no mail delivery, and a contact form
+    that discards messages is broken rather than deferred.
+    """
+
+    id: UUID
+    name: str
+    email: str
+    subject: str
+    message: str
+    ip_address: str | None = None
+    user_agent: str | None = None
+    handled_at: datetime | None = None
+    created_at: datetime | None = None
+
+    @property
+    def is_handled(self) -> bool:
+        """Whether somebody has already dealt with this message."""
+        return self.handled_at is not None

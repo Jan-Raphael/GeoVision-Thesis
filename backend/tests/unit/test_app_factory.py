@@ -25,6 +25,8 @@ def _settings(**overrides: object) -> Settings:
         "jwt_secret_key": "x" * 64,
         "postgres_password": "y" * 32,
         "s3_secret_key": "z" * 32,
+        # Deployed environments must name a real storage backend.
+        "storage_backend": "s3",
     }
     values.update(overrides)
     return Settings(**values)  # type: ignore[arg-type]

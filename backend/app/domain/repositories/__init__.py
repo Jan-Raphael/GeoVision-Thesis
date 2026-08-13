@@ -10,6 +10,7 @@ from __future__ import annotations
 from app.domain.repositories.base import Page, ReadRepository, WriteRepository
 from app.domain.repositories.protocols import (
     AIModelRepository,
+    ContactMessageRepository,
     DeviceRepository,
     ImageRepository,
     NotificationRepository,
@@ -27,6 +28,7 @@ from app.domain.repositories.protocols import (
 
 __all__ = [
     "AIModelRepository",
+    "ContactMessageRepository",
     "DeviceRepository",
     "ImageRepository",
     "NotificationRepository",
