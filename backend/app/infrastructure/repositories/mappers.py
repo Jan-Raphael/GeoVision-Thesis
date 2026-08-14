@@ -19,8 +19,11 @@ from typing import TYPE_CHECKING
 
 from app.domain.entities import (
     AIModel,
+    BoundingBox,
     CaptureSchedule,
     ContactMessage,
+    Detection,
+    DetectionSummary,
     Device,
     Image,
     Notification,
@@ -364,5 +367,35 @@ def to_contact_message(row: models.ContactMessageModel) -> ContactMessage:
         ip_address=row.ip_address,
         user_agent=row.user_agent,
         handled_at=row.handled_at,
+        created_at=row.created_at,
+    )
+
+
+def to_detection(row: models.DetectionModel) -> Detection:
+    """Map a ``detections`` row."""
+    return Detection(
+        id=row.id,
+        image_id=row.image_id,
+        model_id=row.model_id,
+        class_name=row.class_name,
+        confidence=Confidence(row.confidence),
+        bbox=BoundingBox(
+            x=float(row.bbox_x),
+            y=float(row.bbox_y),
+            width=float(row.bbox_w),
+            height=float(row.bbox_h),
+        ),
+        created_at=row.created_at,
+    )
+
+
+def to_detection_summary(row: models.DetectionSummaryModel) -> DetectionSummary:
+    """Map a ``detection_summaries`` row."""
+    return DetectionSummary(
+        id=row.id,
+        image_id=row.image_id,
+        counts=dict(row.counts or {}),
+        total_objects=row.total_objects,
+        inference_ms=row.inference_ms,
         created_at=row.created_at,
     )

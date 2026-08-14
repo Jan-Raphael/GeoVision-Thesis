@@ -146,6 +146,11 @@ class Settings(BaseSettings):
     # worker is accepted - which is not replay protection at all. Refused
     # outside local development, same as filesystem storage.
     nonce_cache_backend: Literal["memory", "redis"] = "redis"
+    # Where ingest hands images off for inference. "logging" records the handoff
+    # and returns, which is what runs when no worker is up: images sit at
+    # `status='pending'`, which is exactly the state a worker picks them up
+    # from, so nothing is lost by deferring.
+    task_queue_backend: Literal["logging", "celery"] = "celery"
     # Encrypts device HMAC secrets at rest. A secret must be *recoverable*
     # to verify a signature, so it is encrypted rather than hashed (ADR-020);
     # keeping the key out of the database is what makes a dump useless.

@@ -100,3 +100,6 @@ class RecordingTaskQueue:
 #: cannot drift apart over a typo.
 TASK_PROCESS_IMAGE = "inference.process_image"
 QUEUE_INFERENCE = "inference"
+
+
+TASK_RECOMPUTE_WINDOW = "progress.recompute_window"

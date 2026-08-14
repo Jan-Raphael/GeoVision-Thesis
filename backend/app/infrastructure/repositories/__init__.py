@@ -16,6 +16,7 @@ from app.infrastructure.repositories.device import (
     SqlAlchemyPairingTokenRepository,
 )
 from app.infrastructure.repositories.image import (
+    SqlAlchemyDetectionRepository,
     SqlAlchemyImageRepository,
     SqlAlchemyPredictionRepository,
     SqlAlchemySnapshotRepository,
@@ -38,6 +39,7 @@ from app.infrastructure.repositories.user import (
 __all__ = [
     "SqlAlchemyAIModelRepository",
     "SqlAlchemyContactMessageRepository",
+    "SqlAlchemyDetectionRepository",
     "SqlAlchemyDeviceRepository",
     "SqlAlchemyImageRepository",
     "SqlAlchemyNotificationRepository",

@@ -1,0 +1,107 @@
+# ---------------------------------------------------------------------------
+# GeoVision construction stages — the canonical definition.
+#
+# THE INDEX ORDER IS FROZEN. It is the output order of the trained checkpoint,
+# so reordering these silently relabels every prediction ever made — including
+# the ones already stored in the database, which carry `fine_class_index`.
+# Adding a class requires retraining and a new model version.
+#
+# Two layers (ADR-001):
+#   * fine classes  — what the CNN predicts. 10 of them, ordinal.
+#   * macro stages  — what the dashboard shows. 5 bars, the fifth human-only.
+#
+# `dataset/metadata/progress_reference.csv` is GENERATED from this file by
+# `scripts/generate_progress_reference.py`. Edit here, never there.
+#
+# Spec: GeoVision-Vault/02-Domain/Construction-Stages.md
+# ---------------------------------------------------------------------------
+
+version: 1
+
+# The nominal percentages are ASSUMPTIONS AWAITING EXPERT REVIEW (Open-Questions
+# Q1). Every progress number the system reports rests on this column. Before the
+# defense these must be reviewed by a civil engineer or project manager, the
+# reviewed values recorded here, and the review cited in the thesis — that is
+# what turns an assumption into a defensible methodology choice.
+reviewed_by: null
+reviewed_on: null
+
+macro_stages:
+  - name: foundation
+    label: Foundation
+    floor_pct: 0
+    ceiling_pct: 20
+  - name: framing
+    label: Framing
+    floor_pct: 20
+    ceiling_pct: 40
+  - name: roofing
+    label: Roofing
+    floor_pct: 40
+    ceiling_pct: 60
+  - name: finishing
+    label: Finishing
+    floor_pct: 60
+    ceiling_pct: 80
+  # Never predicted. Reached only by a named human signing off (ADR-007).
+  - name: approval
+    label: Approval / Checking
+    floor_pct: 80
+    ceiling_pct: 100
+
+classes:
+  - index: 0
+    name: Site Clearing
+    token: CLR
+    macro_stage: foundation
+    nominal_progress_pct: 4
+  - index: 1
+    name: Excavation
+    token: EXC
+    macro_stage: foundation
+    nominal_progress_pct: 9
+  - index: 2
+    name: Footings
+    token: FTG
+    macro_stage: foundation
+    nominal_progress_pct: 14
+  - index: 3
+    name: Foundation
+    token: FDN
+    macro_stage: foundation
+    nominal_progress_pct: 20
+  - index: 4
+    name: Columns
+    token: COL
+    macro_stage: framing
+    nominal_progress_pct: 28
+  - index: 5
+    name: Slab
+    token: SLB
+    macro_stage: framing
+    nominal_progress_pct: 34
+  - index: 6
+    name: Walls
+    token: WAL
+    macro_stage: framing
+    nominal_progress_pct: 40
+  - index: 7
+    name: Roof
+    token: ROF
+    macro_stage: roofing
+    nominal_progress_pct: 60
+  - index: 8
+    name: Finishing
+    token: FIN
+    macro_stage: finishing
+    nominal_progress_pct: 80
+  # `Completed` deliberately maps to 80, NOT 100. Detecting a finished-looking
+  # building sets `awaiting_inspection` and notifies the owner; only a human
+  # awards the final 20 %. The machine ceiling is a safety property, not a
+  # limitation — no model should be the sole basis for declaring a building
+  # finished (ADR-007).
+  - index: 9
+    name: Completed
+    token: CMP
+    macro_stage: approval
+    nominal_progress_pct: 80

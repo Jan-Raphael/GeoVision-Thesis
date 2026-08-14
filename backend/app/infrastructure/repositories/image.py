@@ -12,17 +12,30 @@ from uuid import UUID
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from app.domain.entities import Image, Prediction, ProgressSnapshot
+from app.domain.entities import (
+    Detection,
+    DetectionSummary,
+    Image,
+    Prediction,
+    ProgressSnapshot,
+)
 from app.domain.enums import ImageStatus
 from app.domain.repositories.base import Page
 from app.infrastructure.db import models
 from app.infrastructure.repositories._result import affected_rows
-from app.infrastructure.repositories.mappers import to_image, to_prediction, to_snapshot
+from app.infrastructure.repositories.mappers import (
+    to_detection,
+    to_detection_summary,
+    to_image,
+    to_prediction,
+    to_snapshot,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 __all__ = [
+    "SqlAlchemyDetectionRepository",
     "SqlAlchemyImageRepository",
     "SqlAlchemyPredictionRepository",
     "SqlAlchemySnapshotRepository",
@@ -392,4 +405,90 @@ class SqlAlchemySnapshotRepository:
             models.ProgressSnapshotModel.project_id == project_id
         )
         result = await self._session.execute(stmt)
+        return affected_rows(result)
+
+
+class SqlAlchemyDetectionRepository:
+    """Detection boxes and their per-image summary counts.
+
+    Added in Module 09. Module 02 created the tables and the entities but no
+    repository, because nothing wrote to them until the inference worker existed.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Bind the repository to a session."""
+        self._session = session
+
+    async def add(self, detection: Detection) -> Detection:
+        """Store one detected object."""
+        row = models.DetectionModel(
+            id=detection.id,
+            image_id=detection.image_id,
+            model_id=detection.model_id,
+            class_name=detection.class_name,
+            confidence=detection.confidence.value,
+            bbox_x=detection.bbox.x,
+            bbox_y=detection.bbox.y,
+            bbox_w=detection.bbox.width,
+            bbox_h=detection.bbox.height,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        await self._session.refresh(row)
+        return to_detection(row)
+
+    async def list_for_image(self, image_id: UUID) -> tuple[Detection, ...]:
+        """Every box found on one image, for the dashboard overlay."""
+        stmt = (
+            select(models.DetectionModel)
+            .where(models.DetectionModel.image_id == image_id)
+            .order_by(models.DetectionModel.confidence.desc())
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return tuple(to_detection(row) for row in rows)
+
+    async def add_summary(self, summary: DetectionSummary) -> DetectionSummary:
+        """Store (or replace) the per-image counts.
+
+        Upsert on ``image_id`` so reprocessing an image replaces its counts
+        rather than accumulating a second row - the counts are what the
+        corroboration rules and the reports read, and two rows would double them.
+        """
+        stmt = (
+            pg_insert(models.DetectionSummaryModel)
+            .values(
+                id=summary.id,
+                image_id=summary.image_id,
+                counts=summary.counts,
+                total_objects=summary.total_objects,
+                inference_ms=summary.inference_ms,
+            )
+            .on_conflict_do_update(
+                index_elements=[models.DetectionSummaryModel.image_id],
+                set_={
+                    "counts": summary.counts,
+                    "total_objects": summary.total_objects,
+                    "inference_ms": summary.inference_ms,
+                },
+            )
+            .returning(models.DetectionSummaryModel)
+        )
+        row = (await self._session.execute(stmt)).scalar_one()
+        return to_detection_summary(row)
+
+    async def get_summary(self, image_id: UUID) -> DetectionSummary | None:
+        """Counts for one image."""
+        stmt = select(models.DetectionSummaryModel).where(
+            models.DetectionSummaryModel.image_id == image_id
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return to_detection_summary(row) if row else None
+
+    async def delete_for_image(self, image_id: UUID) -> int:
+        """Remove every detection for an image, before reprocessing it."""
+        from sqlalchemy import delete as sql_delete
+
+        result = await self._session.execute(
+            sql_delete(models.DetectionModel).where(models.DetectionModel.image_id == image_id)
+        )
         return affected_rows(result)

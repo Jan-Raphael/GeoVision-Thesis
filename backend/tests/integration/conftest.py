@@ -60,6 +60,10 @@ def _test_settings() -> Settings:
             # not up - and the failure looks like a code regression rather than
             # a missing service, which costs far more than it sounds like.
             "nonce_cache_backend": "memory",
+            # The logging stub, so the suite needs no broker either. The
+            # handoff is still asserted - `RecordingTaskQueue` is used where a
+            # test cares that it happened.
+            "task_queue_backend": "logging",
         }
     )
 
@@ -121,6 +125,7 @@ async def app(session: AsyncSession, test_settings: Settings) -> AsyncIterator[F
     """
     from app.infrastructure.cache import reset_nonce_cache
     from app.infrastructure.db.session import get_session
+    from app.infrastructure.queue import reset_task_queue
     from app.infrastructure.storage import reset_storage
     from app.main import create_app
 
@@ -130,6 +135,7 @@ async def app(session: AsyncSession, test_settings: Settings) -> AsyncIterator[F
     # nonce claimed in one test would make the next one's identical nonce look
     # like a replay.
     reset_nonce_cache()
+    reset_task_queue()
     application = create_app(test_settings)
     # The limiter is a module-level singleton built from the *global* settings
     # at import time, so `rate_limit_enabled=False` in test settings cannot

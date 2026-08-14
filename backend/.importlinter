@@ -8,9 +8,13 @@
 ;
 ; Layer direction (dependencies point INWARD only):
 ;
-;       api  ->  application  ->  domain
-;        |            |
-;        +---> infrastructure --+
+;   api | worker  ->  application  ->  domain
+;        |                  |
+;        +---> infrastructure ---------+
+;
+; `api` and `worker` are independent delivery mechanisms in the same outermost
+; layer: an HTTP route and a Celery task are the same kind of thing, and neither
+; may import the other.
 ;
 ; `domain` is the innermost ring and may import nothing from the project.
 ; ---------------------------------------------------------------------------
@@ -25,7 +29,7 @@ include_external_packages = True
 name = Clean Architecture layers (dependencies point inward)
 type = layers
 layers =
-    app.api
+    app.api : app.worker
     app.application
     app.infrastructure
     app.domain

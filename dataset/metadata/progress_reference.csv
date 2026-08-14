@@ -1,0 +1,11 @@
+class_index,class_name,token,macro_stage,nominal_progress_pct,stage_floor_pct,stage_ceiling_pct
+0,Site Clearing,CLR,foundation,4,0,20
+1,Excavation,EXC,foundation,9,0,20
+2,Footings,FTG,foundation,14,0,20
+3,Foundation,FDN,foundation,20,0,20
+4,Columns,COL,framing,28,20,40
+5,Slab,SLB,framing,34,20,40
+6,Walls,WAL,framing,40,20,40
+7,Roof,ROF,roofing,60,40,60
+8,Finishing,FIN,finishing,80,60,80
+9,Completed,CMP,approval,80,80,100

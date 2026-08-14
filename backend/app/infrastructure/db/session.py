@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import (
@@ -90,3 +91,22 @@ async def dispose_engine() -> None:
         await _engine.dispose()
         _engine = None
         _session_factory = None
+
+
+@asynccontextmanager
+async def session_scope() -> AsyncIterator[AsyncSession]:
+    """A transactional session for code with no request around it.
+
+    The Celery worker needs the same commit-or-rollback discipline that
+    :func:`get_session` gives a request, but it is not a FastAPI dependency and
+    cannot be injected. Same semantics, different entry point — the worker either
+    persists a whole image's results or none of them, so a failure halfway
+    through never leaves a prediction without its detections.
+    """
+    factory = get_session_factory()
+    async with factory() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise

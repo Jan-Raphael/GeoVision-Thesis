@@ -26,7 +26,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.ports.storage import ObjectStorage
-from app.application.ports.task_queue import LoggingTaskQueue, TaskQueue
+from app.application.ports.task_queue import TaskQueue
 from app.core import device_auth
 from app.core.clock import SYSTEM_CLOCK, Clock
 from app.core.config import Settings, get_settings
@@ -304,14 +304,18 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 OptionalUser = Annotated[User | None, Depends(get_optional_user)]
 
 
-def get_task_queue() -> TaskQueue:
+def get_task_queue(settings: SettingsDep) -> TaskQueue:
     """Provide the background task queue.
 
-    A logging stub until Module 09 supplies a Celery-backed implementation.
-    Ingest still records the handoff, and `images.status='pending'` is the
-    durable backlog a worker will drain when it arrives.
+    Celery when a broker is configured, the logging stub otherwise. With the
+    stub, ingest still records the handoff and `images.status='pending'` is the
+    durable backlog a worker drains whenever it arrives - so running without a
+    worker loses nothing but time.
     """
-    return LoggingTaskQueue()
+    from app.infrastructure.queue import get_task_queue as build_queue
+
+    queue: TaskQueue = build_queue(settings)
+    return queue
 
 
 TaskQueueDep = Annotated[TaskQueue, Depends(get_task_queue)]

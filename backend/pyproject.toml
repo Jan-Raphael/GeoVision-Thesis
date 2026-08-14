@@ -58,6 +58,13 @@ dependencies = [
 worker = ["geovision-ai"]
 
 dev = [
+    # The worker package. Present in dev so the aggregation and inference paths
+    # are testable; deliberately ABSENT from the base group, which is what the
+    # API image installs. Developers and CI legitimately install more than
+    # production does - and the `no-torch-in-api` import contract, which
+    # inspects app.api's import graph rather than what happens to be installed,
+    # is what actually keeps torch out of the API process (ADR-011).
+    "geovision-ai",
     "pytest>=8.3,<9",
     "pytest-asyncio>=0.25,<1",
     "pytest-cov>=6,<7",
@@ -153,6 +160,14 @@ exclude = ["alembic/versions/"]
 # These ship without type stubs or a py.typed marker. Listed explicitly rather
 # than using a blanket ignore_missing_imports, so a genuinely missing dependency
 # still fails loudly.
+# `ai.*` is the worker-only package (the `[worker]` extra). It is deliberately
+# absent from the base and dev environments so the API image never gains torch
+# (ADR-011), which means mypy cannot resolve it here - and that absence is the
+# boundary working, not a missing dependency.
+[[tool.mypy.overrides]]
+module = ["ai.*"]
+ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
 module = [
     "asyncpg.*",
