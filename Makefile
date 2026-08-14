@@ -7,7 +7,7 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help setup env up down logs ps migrate seed dev worker beat api dashboard \
-        lint fmt typecheck arch test test-unit test-integration test-ai cov \
+        lint fmt typecheck arch test test-unit test-integration test-ai e2e cov \
         check guard clean nuke
 
 # --env-file is required, not optional: Compose resolves `.env` relative to the
@@ -73,11 +73,11 @@ dashboard: ## Run the Vite dev server
 	cd dashboard && npm run dev
 
 worker: ## Run the Celery worker (Module 09+)
-	cd backend && uv run celery -A app.infrastructure.tasks.celery_app worker \
-		-Q ingest,inference,reports -l info
+	cd backend && uv run celery -A app.worker.celery_app worker \
+		-Q ingest,inference,interactive,reports -l info
 
 beat: ## Run the Celery beat scheduler (Module 10+)
-	cd backend && uv run celery -A app.infrastructure.tasks.celery_app beat -l info
+	cd backend && uv run celery -A app.worker.celery_app beat -l info
 
 ## ---------------------------------------------------------------------------
 ## Quality
@@ -112,6 +112,9 @@ test-unit: ## Backend unit tests only (no services required)
 
 test-integration: ## Backend integration tests (needs `make up`)
 	cd backend && uv run pytest -m integration
+
+e2e: ## Module 09 end-to-end against live services (API + worker must be up)
+	cd backend && uv run python -m scripts.e2e_module09
 
 test-ai: ## AI package tests
 	cd ai && uv run pytest

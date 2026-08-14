@@ -40,14 +40,23 @@ updated: 2026-08-14
 | ~~P0-2~~ | ~~Update Windows~~ | — | ✅ **not needed.** Build 19045 already meets Docker's minimum. |
 | ~~P0-3~~ | ~~Install Docker Desktop~~ | — | ✅ **done 2026-08-14.** Docker 29.6.2 + Compose v5.3.1, WSL data root on `F:\Docker\wsl`. Redis and MinIO containerised; PostgreSQL stays native behind a compose `db` profile. `/health/ready` returns 200 ready. |
 
-**Nothing is blocking code right now.** Modules 01–05 are done and the whole server stack
-runs. The critical path has moved off the keyboard and onto the calendar: everything in P1
-below is now what actually decides whether this finishes on time.
+**Nothing is blocking code right now.** Modules 01–06 and **09** are done, and the whole
+stack has been exercised end to end against live services.
 
-**Build next: nothing.** Modules 01–06 are done, and that was the last module buildable
-without labelled images. [[Module-07-Classifier-Training]] needs the dataset; 08 needs it too;
-09 needs 07 and 08. **The critical path is now entirely calendar-bound** — every remaining
-hour of coding is blocked behind P1-3 and P1-4 below.
+**Build next: [[Module-10-Reports-and-Remarks]] or [[Module-11-Public-Dashboard]].** Both are
+unblocked. Module 09 was built ahead of 07/08 against a deterministic `StubClassifier`, which
+means **the dataset no longer blocks the code** — 07 and 08 became a weights swap behind the
+`StageClassifier` protocol rather than an integration. Four to five modules of work are
+available without a single labelled image (10 → 11 → 14 → 12).
+
+> ⚠ **Fix Q12 before Module 12.** `get_session` commits *after* the response is sent
+> (measured 6.9 ms), so a real browser that creates a project and immediately navigates to it
+> gets a 404. The test suite cannot see it. Module 12's dashboard does exactly that.
+> See [[Open-Questions]] Q12.
+
+> Note the dependency correction: [[Build-Order]] says 12 depends only on 11, while
+> [[Module-12-Owner-Dashboard]] lists 11, 05, 10 **and 14** — and 14 lists 12. That circle
+> needs resolving (build 14 first, or have the pairing modal poll with a WebSocket upgrade).
 
 > The preprocessing pipeline was deliberately settled *before* annotation begins. Annotate
 > first and you annotate twice, because the quality gate decides which images are worth
@@ -85,7 +94,7 @@ path of the thesis.**
 
 | # | Task | Owner module |
 |---|---|---|
-| P2-1 | Modules 05 → 16 built and tested | [[Build-Order]] |
+| P2-1 | Modules 10 → 16 built and tested | [[Build-Order]] |
 | P2-2 | Decide where trained checkpoints live (Q10) — Release assets / Drive + hash / git-lfs | [[Module-07-Classifier-Training]] |
 | P2-3 | Verify the ESP32 pinout for *your* board revision (Q2) and record it | [[ESP32-CAM-Node]] |
 | P2-4 | Decide the public server host + HTTPS endpoint for the field device (Q4) — Cloudflare Tunnel is the cheap answer | [[Module-16-Deployment]] |
@@ -118,12 +127,12 @@ Authoritative board: [[Build-Order]].
 | 04 | Projects & Folders | ✅ done | — |
 | 05 | Device Pairing & Ingestion | ✅ done | — |
 | 06 | AI Preprocessing | ✅ done | — |
-| 07 | Classifier Training | **▶ next — blocked** | **P1-3, P1-4** (dataset) |
-| 08 | YOLO Detection | pending | P1-3, P1-4 |
-| 09 | Inference & Progress | pending | 05, 07, 08 — *the progress engine can be built early against a `StubClassifier`* |
-| 10 | Reports & Remarks | pending | 09 |
-| 11 | Public Dashboard | pending | 04 |
-| 12 | Owner Dashboard | pending | 11 |
+| 07 | Classifier Training | ⏸ blocked | **P1-3, P1-4** (dataset). Now a weights swap, not an integration. |
+| 08 | YOLO Detection | ⏸ blocked | P1-3, P1-4 |
+| 09 | Inference & Progress | ✅ done | — *built early against a `StubClassifier`, which unblocked 10–14* |
+| 10 | Reports & Remarks | **▶ next** | — |
+| 11 | Public Dashboard | **▶ next** | — |
+| 12 | Owner Dashboard | pending | 11, 10, 14 + **Q12** |
 | 13 | Firmware | pending | **P1-1** (hardware) |
 | 14 | Realtime | pending | 09, 12 |
 | 15 | Testing & Evaluation | pending | all |
@@ -144,6 +153,8 @@ Unresolved questions, from [[Open-Questions]]. Each one blocks or reshapes work:
 | Q2 | Exact ESP32 pinout for your board | P2 |
 | Q4 | Where does the server run? | P2 |
 | Q10 | Where do checkpoints live? | P2 |
+| Q12 | Commit-after-response defect | **P1 — blocks Module 12** |
+| Q11 | Superseding predictions needs a migration | P3 |
 | Q8 | Panel documentation format | P2 |
 | Q6 | Timezone / window policy | assumed daily, `Asia/Manila` |
 

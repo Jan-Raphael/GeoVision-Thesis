@@ -64,9 +64,16 @@ Original spec endpoints (`/upload`, `/predict`, `/history`, `/projects`, `/repor
 | PATCH | `/projects/{id}/visibility` | owner only |
 | POST | `/projects/{id}/approve` | **the final 20 %** — `{inspection_notes, photo_ids?}`; requires `project:approve`; 409 unless `approval_state='awaiting_inspection'` |
 | POST | `/projects/{id}/archive` · DELETE `/projects/{id}` | owner only |
-| GET | `/projects/{id}/timeline` | full snapshot series |
-| GET | `/projects/{id}/progress` | current `{displayed_pct, macro_stage, stages{foundation,framing,roofing,finishing,approval}, updated_at, algorithm_version}` |
-| POST | `/projects/{id}/recompute` | manual re-aggregation (manager+); enqueues job |
+| GET | `/projects/{id}/timeline` | full snapshot series: `{points[{window_start, window_end, displayed_pct, raw_pct, ema_pct, macro_stage, eligible_image_count, devices_reporting, algorithm_version}], algorithm_version}`. `?from=&to=`. Windows with no captures are **absent**, never carried forward — the chart must draw the gap |
+| GET | `/projects/{id}/progress` | current `{displayed_pct, macro_stage, stages{foundation_pct,framing_pct,roofing_pct,finishing_pct,approval_pct}, updated_at, algorithm_version, eligible_image_count, devices_reporting, has_data}` |
+| POST | `/projects/{id}/recompute` | manual re-aggregation; requires `progress:recompute` (manager+). Enqueues, returns **202**. `?window=` for one window. Idempotent |
+
+> **`has_data`** distinguishes "nothing has been measured" from "measured 0 %". A project with
+> no captures reports `displayed_pct: 0.0` because that is its stored value, and without the
+> flag a dashboard cannot tell that apart from a site where work genuinely has not started.
+> Every figure here is **read from a stored snapshot**, never recomputed on the way out, so
+> the dashboard, the PDF report, and the thesis appendix render one row rather than three
+> live recalculations that can disagree.
 
 `GET /projects/{id}` returns: project fields · `progress` · `stages[]` · `deadline_date` ·
 `status` · `devices[]` · `members[]` · `recent_images[]` (with GPS + timestamps) ·
@@ -125,21 +132,34 @@ Headers: `X-Device-Id`, `X-Timestamp`, `X-Nonce`, `X-Signature` — see
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/projects/{id}/images` | manual upload (multipart) — the original `/upload` |
-| GET | `/projects/{id}/images` | `?from=&to=&device_id=&face=&status=&limit=&cursor=` |
-| GET | `/images/{id}` | image + prediction + detections + signed URLs |
-| DELETE | `/images/{id}` | editor+; triggers recompute |
-| POST | `/images/{id}/reprocess` | re-run AI (manager+) |
+| POST | `/projects/{id}/images` | manual upload (multipart) — the original `/upload`. *Not yet implemented.* |
+| GET | `/projects/{id}/images` | `?from=&to=&device_id=&face=&status=&limit=&cursor=`. *Not yet implemented — use `/history`, which returns the same rows joined to their predictions.* |
+| GET | `/projects/{id}/images/{image_id}` | image + prediction + detections + signed URLs |
+| DELETE | `/projects/{id}/images/{image_id}` | editor+; triggers recompute. *Not yet implemented.* |
+| POST | `/projects/{id}/images/{image_id}/reprocess` | re-run AI; requires `progress:recompute` (manager+). Clears the stored prediction and detections, resets to `pending`, returns **202** |
 | POST | `/projects/{id}/assets` | blueprint / 3D render / reference upload |
 | GET | `/projects/{id}/assets` · DELETE `/assets/{id}` | |
+
+> **Image routes are nested under their project** (2026-08-14, ADR-027), replacing the
+> original top-level `/images/{id}`. Same reasoning as the device routes above: the permission
+> guard resolves authority from `(caller, project)`, so a project-less path would have to look
+> the image up before deciding whether the caller may know it exists — and a 403 where a 404
+> belonged discloses other people's capture history. An image id belonging to a different
+> project returns **404**, indistinguishable from one that does not exist.
 
 ## Predictions
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/predict` | ad-hoc inference on an uploaded image, **no persistence** — for demos/defense. Returns `{stage, confidence, progress, macro_stage, detections[], inference_ms}` |
-| GET | `/images/{id}/prediction` | stored prediction |
-| GET | `/projects/{id}/history` | the original `/history`: images + predictions joined, chronological |
+| POST | `/predict` | ad-hoc inference on an uploaded image, **no persistence** — for demos/defense. Multipart `file`. Returns `{rejected, persisted:false, stage, confidence, macro_stage, progress, probabilities{}, detections[], counts{}, quality{}, preprocessing_ms, inference_ms, total_ms, model_name, model_version, model_is_stub, preprocessing_fingerprint}`. Authenticated + rate-limited (10/min). **503** when no worker answers |
+| GET | `/projects/{id}/images/{image_id}/prediction` | stored prediction. **404** if the image has not been scored yet, with `details.image_status` |
+| GET | `/projects/{id}/history` | the original `/history`: images + predictions joined, chronological, cursor-paginated. Filters `?from=&to=&device_id=&status=&limit=&cursor=`. Rows with no prediction are **included** with null stage fields |
+
+> `POST /predict` is a **synchronous round trip to the worker** (ADR-026): the API process may
+> never import torch (ADR-011), so it publishes a task on a dedicated `interactive` queue and
+> waits, bounded by `GV_PREDICT_TIMEOUT_SECONDS`. A rejected frame is a **200** carrying
+> `rejected: true`, not an error — the quality gate firing is the answer, not a failure to
+> answer. `persisted: false` is always present so a demo cannot be mistaken for stored data.
 
 ## Remarks
 
@@ -159,8 +179,21 @@ Body: `{message, remark_type, severity, is_public, effective_from?, effective_to
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/model/status` | active classifier + detector: architecture, version, classes, metrics, device (`cuda`/`cpu`), loaded_at, avg latency, queue depth |
-| GET | `/models` | all registered models (thesis comparison table: ResNet18 vs MobileNetV3 vs YOLOv8) |
+| GET | `/model/status` | registry reconciled with a live worker probe: `{worker_reachable, using_stubs, classifier, detector, live_classifier, live_detector, preprocessing_fingerprint, preprocessing_matches, loaded_at, mean_latency_ms, images_processed, queue_depth{}}`. Any authenticated user |
+| GET | `/models` | all registered models (thesis comparison table: ResNet18 vs MobileNetV3 vs YOLOv8). Stubs included, flagged `is_stub` |
+
+> `/model/status` reads **two sources that can legitimately disagree**: PostgreSQL knows what
+> was trained and how it scored; the worker knows what is in memory now, on which device, and
+> how long recent images took. It **always returns 200** — when no worker answers,
+> `worker_reachable: false` and the live fields are null. An endpoint whose purpose is
+> observing health must not fail when things are unhealthy.
+>
+> Two fields carry weight. `using_stubs` is true while placeholder models are answering, so a
+> demo can never be mistaken for a trained result. `preprocessing_matches: false` means the
+> running pipeline is no longer the one the weights were trained through (ADR-025) —
+> predictions continue and are quietly worse than the reported metrics claim. `null` there
+> means the loaded model carries no fingerprint (a stub, or a pre-Module-07 checkpoint);
+> unknown and mismatched are deliberately different answers.
 | GET | `/health` · `/health/ready` | liveness / readiness |
 | GET | `/metrics` | Prometheus (optional) |
 
@@ -171,7 +204,7 @@ Body: `{message, remark_type, severity, is_public, effective_from?, effective_to
 | Original | Now |
 |---|---|
 | `POST /upload` | `POST /projects/{id}/images` (manual) + `POST /ingest/images` (device) |
-| `POST /predict` | `POST /predict` (stateless demo path) |
+| `POST /predict` | `POST /predict` (stateless demo path, worker round trip - ADR-026) |
 | `GET /history` | `GET /projects/{id}/history` |
 | `GET /projects` | `GET /projects` + `GET /public/feed` |
 | `GET /reports` | `GET /projects/{id}/reports` |

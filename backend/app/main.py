@@ -155,6 +155,9 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
         health,
         ingest,
         members,
+        models,
+        predictions,
+        progress,
         projects,
         public,
         public_users,
@@ -173,9 +176,14 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(public.router, prefix=prefix)
     app.include_router(devices.router, prefix=prefix)
     app.include_router(ingest.router, prefix=prefix)
+    # Progress before predictions: both declare routes under /projects/{id}, and
+    # registration order is match order. Keeping the narrower, literal paths
+    # first means a future /projects/{id}/images/{id} pattern cannot shadow them.
+    app.include_router(progress.router, prefix=prefix)
+    app.include_router(predictions.router, prefix=prefix)
+    app.include_router(models.router, prefix=prefix)
 
     # Mounted as the corresponding modules land:
-    #   Module 09  predictions, progress, models
     #   Module 10  reports
     #   Module 14  ws
 

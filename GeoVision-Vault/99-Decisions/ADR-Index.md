@@ -424,6 +424,100 @@ the check would cry wolf and get disabled. A hand-maintained version integer —
 correct while somebody remembers to bump it, and the failure mode of forgetting is exactly
 the one being guarded against.
 
+## ADR-026 - `POST /predict` is a round trip to the worker, on its own queue
+**Status:** Accepted · 2026-08-14
+**Context.** [[API-Contract]] specifies `POST /predict` as a synchronous, stateless demo
+endpoint returning a stage and confidence in the response body, and `GET /model/status` as
+reporting the device a model sits on, when it loaded, and its rolling latency. Both need a
+model. **The API process is forbidden from importing torch** (ADR-011), enforced by the
+`no-torch-in-api` import contract — so the API cannot answer either question itself. The
+existing `TaskQueue` port is fire-and-forget and cannot express a reply.
+**Decision.** A second outbound port, `InferenceGateway`, sends a Celery task and waits on the
+result backend, bounded by `GV_PREDICT_TIMEOUT_SECONDS` (30 s) and
+`GV_MODEL_STATUS_TIMEOUT_SECONDS` (3 s). The wait runs in a worker thread, never on the event
+loop. Both tasks are routed to a **third queue, `interactive`**, separate from `inference`.
+Failure is asymmetric by design: `predict` raises 503, while `status` and `queue_depth`
+degrade to `None`/`{}`.
+**Consequences.** torch stays out of the API image (~200 MB, not ~2.5 GB) with a synchronous
+endpoint anyway. The separate queue means a site with a hundred queued captures cannot delay
+the live defense demo — sharing `inference` would have made the endpoint time out for reasons
+unrelated to whether it works. `/model/status` still answers when the worker is down, which is
+the moment it is most needed. Costs: `/predict` needs a running worker (503 otherwise, stated
+plainly), and image bytes travel base64 through Redis, so the size limit is enforced *before*
+the enqueue. The worker's JSON payload and the gateway's parser are a hand-written contract
+that nothing type-checks, so `tests/unit/test_inference_gateway.py` builds the payload with
+the real producer and reads it with the real consumer.
+**Rejected.** (a) Letting the API import torch for this one endpoint — breaks ADR-011 and the
+contract that enforces it, for one demo route. (b) `202 + poll` — the contract specifies a
+synchronous body, and a defense demo is precisely where a second round trip is unwelcome.
+(c) Reusing the `inference` queue — see above. (d) Pickle serialisation to avoid base64 — any
+writer to the broker would gain code execution in the worker.
+
+## ADR-027 - Image routes are nested under their project
+**Status:** Accepted · 2026-08-14
+**Context.** [[API-Contract]] listed `GET /images/{id}`, `POST /images/{id}/reprocess`, and
+`DELETE /images/{id}` at the top level. The permission guard (`require_permission`) resolves
+authority from `(caller, project)` and reads `project_id` from the path.
+**Decision.** Nest them: `/projects/{project_id}/images/{image_id}[/prediction|/reprocess]`.
+This is the same reasoning already applied to the device routes in Module 05, now applied
+consistently.
+**Consequences.** The guard is structural rather than something each handler must remember. A
+project-less path would have to look the image up *before* it could decide whether the caller
+may know the image exists, and a 403-where-a-404-belonged there discloses other people's
+capture history. The use cases additionally verify `image.project_id == project_id` and answer
+404 either way, so an id from another project is indistinguishable from one that does not
+exist. Cost: longer URLs, and [[API-Contract]] was corrected to match.
+**Rejected.** Keeping `/images/{id}` with an internal lookup — it works, but it puts the
+403-vs-404 decision in every handler instead of in one dependency, and that is a mistake that
+is invisible until it leaks.
+
+## ADR-028 - `progress:recompute` is its own permission, at manager+
+**Status:** Accepted · 2026-08-14
+**Context.** [[API-Contract]] marks `POST /projects/{id}/recompute` and image reprocessing as
+"manager+", but the permission matrix in [[Roles-and-Permissions]] had no row for either, and
+no existing permission fits: `PROJECT_EDIT` is held by editors, while `MEMBER_MANAGE` and
+`PROJECT_APPROVE` are semantically unrelated.
+**Decision.** Add `Permission.PROGRESS_RECOMPUTE = "progress:recompute"`, granted from
+**manager** upward, covering both re-running the AI over one image and rebuilding a project's
+whole timeline. The matrix in [[Roles-and-Permissions]] gains a matching row.
+**Consequences.** The contract's stated authority level is now enforced rather than
+approximated. Editing a project's deadline and rewriting the AI-derived figure the project is
+judged on are separated, which is the distinction that matters: the second is the number a
+payment or scheduling decision might rest on. Cost: one more permission in the matrix, and it
+appears in the folder payload's `permissions` block, so the Module 12 UI can render the
+buttons from server truth.
+**Rejected.** (a) Overloading `PROJECT_EDIT` — grants it to editors, contradicting the
+contract. (b) Overloading `PROJECT_APPROVE` — right role, wrong meaning; a permission named
+for approval guarding a recompute is the kind of thing that gets mis-granted later.
+
+## ADR-029 - The Celery worker's database engine is unpooled
+**Status:** Accepted · 2026-08-14
+**Context.** Found by the first end-to-end run against a live worker, not by any
+test. Each Celery task calls `asyncio.run`, which creates an event loop and **closes it**
+when the task returns. The SQLAlchemy engine was a process-wide singleton with a real
+connection pool, and an asyncpg connection belongs to the loop that opened it — so the
+second task checked out a connection whose loop was dead. The symptom was not a clean
+error: the first task or two succeeded, then every subsequent one failed with
+`RuntimeError: Event loop is closed` surfacing as
+`AttributeError: 'NoneType' object has no attribute 'send'` from inside the driver, images
+stopped being scored, and the reported mean latency inflated from 27 ms to 3 707 ms as
+connection retries piled up. Invisible to the whole suite, because integration tests build
+their own engine per fixture and never call `asyncio.run` twice against the shared one.
+**Decision.** A second engine for the worker, built with `NullPool`, used by `session_scope`.
+Every task additionally disposes it inside its own loop via the `_run` wrapper in
+`app.worker.inference`. The API keeps the pooled engine.
+**Consequences.** Each task opens one connection and closes it — a few milliseconds against
+an inference of hundreds, and in exchange the worker is correct over an unbounded number of
+tasks. The API is untouched: it serves many requests on one long-lived loop, which is exactly
+what pooling is for. `tests/unit/test_worker_session.py` pins both halves so the pool cannot
+quietly come back. Note the failure mode for anyone debugging something similar: tasks that
+work in isolation and fail in sequence point at loop-scoped resources, not at the task logic.
+**Rejected.** (a) One long-lived event loop per worker process with coroutines submitted to
+it — faster, but it changes how every task is written for a saving of milliseconds on work
+that takes hundreds. (b) Disposing the shared engine after each task — that would repeatedly
+tear down the pool the API process also uses if the two ever ran in one process, and it
+treats the symptom rather than the loop-scoping that causes it.
+
 ---
 
 ## Template

@@ -65,6 +65,7 @@ _ENGINEER: frozenset[Permission] = _EDITOR | {Permission.DEVICE_MANAGE}
 _MANAGER: frozenset[Permission] = _ENGINEER | {
     Permission.MEMBER_MANAGE,
     Permission.PROJECT_APPROVE,
+    Permission.PROGRESS_RECOMPUTE,
 }
 
 _OWNER: frozenset[Permission] = _MANAGER | {

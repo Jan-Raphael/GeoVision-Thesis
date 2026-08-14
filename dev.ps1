@@ -73,6 +73,7 @@ switch ($Task.ToLower()) {
             @('guard', 'Assert the no-TensorFlow constraint'),
             @('test', 'Run every test suite'),
             @('test-unit', 'Backend unit tests only'),
+            @('e2e', 'Module 09 end-to-end (API + worker must be up)'),
             @('cov', 'Backend tests with HTML coverage'),
             @('check', 'Everything CI runs, locally'),
             @('clean', 'Remove caches and build artifacts'),
@@ -136,8 +137,8 @@ switch ($Task.ToLower()) {
         # supported local option. In production the worker runs in a Linux
         # container with the default pool. See ADR-013.
         Write-Step 'Starting Celery worker (solo pool - Windows)'
-        Invoke-In 'backend' 'uv' @('run', 'celery', '-A', 'app.infrastructure.tasks.celery_app',
-            'worker', '-Q', 'ingest,inference,reports', '-l', 'info', '--pool=solo')
+        Invoke-In 'backend' 'uv' @('run', 'celery', '-A', 'app.worker.celery_app',
+            'worker', '-Q', 'ingest,inference,interactive,reports', '-l', 'info', '--pool=solo')
     }
 
     'lint' {
@@ -176,6 +177,12 @@ switch ($Task.ToLower()) {
     'test-unit' { Invoke-In 'backend' 'uv' @('run', 'pytest', '-m', 'not integration') }
     'test-integration' { Invoke-In 'backend' 'uv' @('run', 'pytest', '-m', 'integration') }
     'test-ai' { Invoke-In 'ai' 'uv' @('run', 'pytest') }
+    'e2e' {
+        # Needs the API and a worker already running - it drives real HTTP
+        # against live services rather than an in-process app.
+        Write-Step 'Module 09 end-to-end (API + worker must be up)'
+        Invoke-In 'backend' 'uv' @('run', 'python', '-m', 'scripts.e2e_module09')
+    }
 
     'cov' {
         Invoke-In 'backend' 'uv' @('run', 'pytest', '--cov=app', '--cov-report=html', '--cov-report=term-missing')

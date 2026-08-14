@@ -19,6 +19,7 @@ pytestmark = pytest.mark.unit
 
 
 def _settings(**overrides: object) -> Settings:
+    """Hermetic settings: `_env_file=None` keeps a local `.env` out of the test."""
     values: dict[str, object] = {
         "environment": Environment.CI,
         "debug": False,
@@ -31,7 +32,7 @@ def _settings(**overrides: object) -> Settings:
         "storage_backend": "s3",
     }
     values.update(overrides)
-    return Settings(**values)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **values)  # type: ignore[arg-type]
 
 
 async def test_injected_settings_reach_the_endpoints() -> None:

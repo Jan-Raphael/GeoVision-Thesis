@@ -24,7 +24,7 @@ updated: 2026-08-14
 | 06 | [[Module-06-AI-Preprocessing]] | 01 | OpenCV pipeline + quality gate, unit-tested |
 | 07 | [[Module-07-Classifier-Training]] | 06 | trained ResNet18 + MobileNetV3, checkpoints, metrics |
 | 08 | [[Module-08-YOLO-Detection]] | 06 | trained YOLOv8, detection outputs |
-| 09 | [[Module-09-Inference-Service]] | 05,07,08 | end-to-end: upload → prediction → progress in DB |
+| 09 | [[Module-09-Inference-Service]] | 05,06 | end-to-end: upload → prediction → progress in DB *(07/08 swap the stub for real weights)* |
 | 10 | [[Module-10-Reports-and-Remarks]] | 09 | PDF/CSV reports, status derivation, system remarks |
 | 11 | [[Module-11-Public-Dashboard]] | 04,09 | homepage feed, public folder, search, contact |
 | 12 | [[Module-12-Owner-Dashboard]] | 11 | auth UI, create project, folder, pairing modal, devices |
@@ -78,10 +78,10 @@ flowchart LR
 | 04 | ✅ **done** | 2026-08-13 | 2026-08-13 | Projects, folder payload, collaboration, assets, remarks, public surface. 413 tests. Storage port (ADR-018) removed the MinIO dependency. |
 | 05 | ✅ **done** | 2026-08-14 | 2026-08-14 | Pairing + QR, HMAC ingest, race-free naming, device health, simulator. 509 tests. Corrected the vault's hashed-secret contradiction (ADR-020) and a per-process lock key that would only have failed in production (ADR-022). |
 | 06 | ✅ **done** | 2026-08-14 | 2026-08-14 | Preprocessing pipeline, quality gate, calibration, thesis Figure 6, ~88 ms/image. 113 tests. Added a config fingerprint (ADR-025) and a CI parity guard for shared constants (ADR-023); resize/denoise order reversed on measurement (ADR-024). |
-| 07 | ▶ **next** | | | **Blocked on the dataset** — P1-3, P1-4 |
-| 08 | planned | | | |
-| 09 | planned | | | |
-| 10 | planned | | | |
+| 07 | ⏸ **blocked** | | | **Needs the dataset** — P1-3, P1-4. Becomes a weights swap: Module 09 already serves a `StageClassifier` protocol. |
+| 08 | ⏸ **blocked** | | | Needs the dataset. |
+| 09 | ✅ **done** | 2026-08-14 | 2026-08-14 | Progress engine, stub models, worker, and the full HTTP surface. 765 tests. Verified end to end against live PostgreSQL + Redis + MinIO + worker (39/39): upload → prediction → 27.0 % progress → `/predict` → reprocess. Built ahead of 07/08 against a deterministic stub, which unblocked 10-14. ADR-026…029; the E2E caught a worker bug no test could see (ADR-029). |
+| 10 | ▶ **next** | | | Unblocked — 09 is done. |
 | 11 | planned | | | |
 | 12 | planned | | | |
 | 13 | planned | | | |

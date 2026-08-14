@@ -56,6 +56,13 @@ class AuditAction(StrEnum):
     DEVICE_UNPAIRED = "device.unpaired"
     DEVICE_AUTH_FAILED = "device.auth_failed"
 
+    # Module 09
+    #: Both rewrite numbers the project is judged on, from data that is already
+    #: stored. Auditing them answers "why did this figure change on Tuesday?"
+    #: without anyone having to guess.
+    IMAGE_REPROCESSED = "image.reprocessed"
+    PROGRESS_RECOMPUTE_REQUESTED = "progress.recompute_requested"
+
 
 class AuditLogger:
     """Appends audit entries to the caller's transaction."""

@@ -166,6 +166,15 @@ class Settings(BaseSettings):
     classifier_weights: str = ""
     detector_weights: str = ""
     use_stub_models: bool = True
+    # How long `POST /predict` waits for a worker. The API cannot run a model
+    # itself (ADR-011), so the request is a round trip over the broker; this
+    # bounds it. Generous enough for a cold CPU worker's first real inference,
+    # short enough that a browser has not given up first.
+    predict_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
+    # `/model/status` must answer quickly even when nothing is listening - it is
+    # a health surface, and a health check that hangs is an outage of its own.
+    model_status_timeout_seconds: float = Field(default=3.0, ge=0.5, le=30.0)
+    predict_rate_limit: str = "10/minute"
 
     # -- Project defaults ---------------------------------------------------
     default_timezone: str = "Asia/Manila"

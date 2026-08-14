@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Coroutine
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -30,7 +31,7 @@ from app.domain.entities import (
 from app.domain.enums import ImageStatus, MacroStage, RemarkType, Severity
 from app.domain.value_objects import Confidence, ProgressPct
 
-__all__ = ["process_image", "recompute_window"]
+__all__ = ["predict_adhoc", "process_image", "recompute_window", "service_status"]
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ def process_image(self: Any, image_id: str) -> dict[str, Any]:
     Returns:
         A small summary, useful when inspecting the result backend by hand.
     """
-    return asyncio.run(_process_image(self, UUID(image_id)))
+    return _run(_process_image(self, UUID(image_id)))
 
 
 @shared_task(
@@ -69,7 +70,95 @@ def recompute_window(
 ) -> dict[str, Any]:
     """Rebuild a project's progress timeline from its stored predictions."""
     moment = datetime.fromisoformat(window_start) if window_start else None
-    return asyncio.run(_recompute(self, UUID(project_id), moment))
+    return _run(_recompute(self, UUID(project_id), moment))
+
+
+def _run(work: Coroutine[Any, Any, dict[str, Any]]) -> dict[str, Any]:
+    """Run one task's coroutine in its own event loop, then tear the engine down.
+
+    ``asyncio.run`` closes the loop it created. Anything holding a connection
+    opened on that loop — the SQLAlchemy engine's pool — is left holding a corpse,
+    and the *next* task fails inside the driver rather than here. Disposing
+    within the same loop that created the connections is what keeps each task
+    self-contained.
+
+    The engine is unpooled (see :func:`~app.infrastructure.db.session.get_worker_engine`),
+    so this is belt and braces: it also returns the connection promptly instead
+    of at interpreter exit.
+    """
+
+    async def _scoped() -> dict[str, Any]:
+        from app.infrastructure.db.session import dispose_worker_engine
+
+        try:
+            return await work
+        finally:
+            await dispose_worker_engine()
+
+    return asyncio.run(_scoped())
+
+
+# ---------------------------------------------------------------------------
+# Interactive tasks
+#
+# These two are *replies*, not fire-and-forget work: an HTTP request is blocked
+# on each of them. That is why they run on their own `interactive` queue rather
+# than sharing `inference` with image processing. A site with a hundred captures
+# in the backlog would otherwise put the live defense demo behind all hundred of
+# them, and the endpoint would time out for reasons that have nothing to do with
+# whether it works.
+#
+# Neither retries. A caller waiting on a synchronous response has already given
+# up by the time a 30-second retry lands, and the retry would then run inference
+# nobody is listening for.
+# ---------------------------------------------------------------------------
+
+
+@shared_task(name="inference.predict_adhoc", max_retries=0, queue="interactive")
+def predict_adhoc(image_b64: str) -> dict[str, Any]:
+    """Classify one image and persist nothing — the ``POST /predict`` path.
+
+    Args:
+        image_b64: The uploaded image, base64-encoded. Celery here is configured
+            for JSON only (``accept_content=["json"]``), which cannot carry raw
+            bytes; base64 is the cost of not enabling pickle, and enabling pickle
+            on a broker means any queue writer gets code execution in the worker.
+
+    Returns:
+        A JSON-safe mapping matching
+        :class:`~app.application.ports.inference_gateway.AdHocPrediction`.
+    """
+    import base64
+
+    from app.infrastructure.ai.adapter import InferenceAdapter, get_inference_service
+
+    settings = get_settings()
+    adapter = InferenceAdapter(get_inference_service(settings))
+    result = adapter.run(base64.b64decode(image_b64), None)
+    return _as_adhoc_payload(result, adapter)
+
+
+@shared_task(name="inference.service_status", max_retries=0, queue="interactive")
+def service_status() -> dict[str, Any]:
+    """Report what this worker process currently has loaded.
+
+    The device, the load time, and the rolling latency are properties of *this
+    process*; they exist nowhere the API can read them, which is why the API has
+    to ask rather than look them up.
+    """
+    from app.infrastructure.ai.adapter import InferenceAdapter, get_inference_service
+
+    settings = get_settings()
+    adapter = InferenceAdapter(get_inference_service(settings))
+    status = adapter.status()
+    return {
+        "classifier": _as_model_payload(status.classifier),
+        "detector": _as_model_payload(status.detector) if status.detector else None,
+        "preprocessing_fingerprint": status.preprocessing_fingerprint,
+        "loaded_at": status.loaded_at,
+        "mean_latency_ms": status.mean_latency_ms,
+        "images_processed": status.images_processed,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -357,6 +446,79 @@ async def _active_model_id(session: Any, adapter: Any) -> UUID:
         )
     )
     return registered.id
+
+
+def _as_model_payload(info: Any) -> dict[str, Any]:
+    """Flatten a :class:`ai.models.base.ModelInfo` into JSON-safe primitives."""
+    return {
+        "name": info.name,
+        "architecture": info.architecture,
+        "version": info.version,
+        "class_names": list(info.class_names),
+        "input_size": info.input_size,
+        "device": info.device,
+        "is_stub": info.is_stub,
+        "preprocessing_fingerprint": info.preprocessing_fingerprint,
+    }
+
+
+def _as_adhoc_payload(result: Any, adapter: Any) -> dict[str, Any]:
+    """Flatten an ``InferenceResult`` for the wire.
+
+    A rejected frame is a **successful** response carrying ``rejected: true``,
+    not an error. The gate firing is information the caller asked for — during a
+    demo it is arguably the more interesting outcome, because it shows the
+    system declining to guess rather than inventing a stage from a blurred
+    photograph.
+    """
+    info = adapter.status().classifier
+    quality = {
+        "passed": result.quality.passed,
+        "flags": [flag.value for flag in result.quality.flags],
+        "blur_score": round(result.quality.blur_score, 3),
+        "brightness": round(result.quality.brightness, 3),
+        "occlusion_ratio": round(result.quality.occlusion_ratio, 4),
+    }
+    payload: dict[str, Any] = {
+        "rejected": result.rejected,
+        "quality": quality,
+        "rejection_reason": result.quality.reason,
+        "detections": [
+            {
+                "class_name": found.class_name,
+                "confidence": round(found.confidence, 4),
+                "bbox": {
+                    "x": found.bbox.x,
+                    "y": found.bbox.y,
+                    "width": found.bbox.width,
+                    "height": found.bbox.height,
+                },
+            }
+            for found in result.detections.objects
+        ],
+        "counts": result.detections.counts,
+        "preprocessing_ms": result.preprocessing_ms,
+        "inference_ms": result.inference_ms,
+        "total_ms": result.total_ms,
+        "model_name": info.name,
+        "model_version": info.version,
+        "model_is_stub": info.is_stub,
+        "preprocessing_fingerprint": result.preprocessing_fingerprint,
+    }
+
+    if result.classification is not None:
+        stage = _stage_for(result.classification.class_index)
+        payload.update(
+            stage=result.classification.class_name,
+            class_index=result.classification.class_index,
+            confidence=round(result.classification.confidence, 4),
+            macro_stage=stage.macro.value,
+            progress_pct=stage.nominal_pct,
+            probabilities={
+                name: round(value, 4) for name, value in result.classification.probabilities.items()
+            },
+        )
+    return payload
 
 
 async def _system_remark(

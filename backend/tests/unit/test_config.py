@@ -9,7 +9,14 @@ from app.core.config import Environment, Settings
 
 
 def _base(**overrides: object) -> Settings:
-    """Build settings with valid deployed-environment defaults."""
+    """Build settings with valid deployed-environment defaults.
+
+    ``_env_file=None`` is what makes this hermetic. Without it pydantic-settings
+    fills every field this dict does not set from the developer's git-ignored
+    ``.env``, so "are production settings valid?" would silently become "are
+    they valid *on this machine today*?" — a test that passes in CI, where no
+    ``.env`` exists, and fails for whoever last edited theirs.
+    """
     values: dict[str, object] = {
         "environment": Environment.PRODUCTION,
         "debug": False,
@@ -24,7 +31,7 @@ def _base(**overrides: object) -> Settings:
         "storage_backend": "s3",
     }
     values.update(overrides)
-    return Settings(**values)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **values)  # type: ignore[arg-type]
 
 
 pytestmark = pytest.mark.unit
@@ -98,7 +105,7 @@ class TestDerivedUrls:
 
     def test_default_postgres_port_avoids_the_common_windows_clash(self) -> None:
         """5433 by default: dev machines often already run PostgreSQL on 5432."""
-        assert Settings().postgres_port == 5433
+        assert Settings(_env_file=None).postgres_port == 5433
 
 
 class TestDocsExposure:
@@ -144,4 +151,4 @@ class TestStoragePolicy:
 
     def test_local_is_the_default_for_development(self) -> None:
         """So the project runs with no object store installed."""
-        assert Settings().storage_backend == "local"
+        assert Settings(_env_file=None).storage_backend == "local"

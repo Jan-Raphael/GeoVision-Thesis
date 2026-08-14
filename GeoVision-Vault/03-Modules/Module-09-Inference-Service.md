@@ -5,8 +5,8 @@ module: 9
 aliases:
   - Module-09-Progress-Engine
   - Module-09-Inference-and-Progress
-status: planned
-updated: 2026-08-12
+status: done
+updated: 2026-08-14
 ---
 
 # Module 09 — Inference Service & Progress Engine
@@ -85,10 +85,21 @@ Modules 05, 06, 07, 08. `celery`, `redis`, `torch`, `ultralytics`.
 
 ## How to run
 ```bash
-celery -A app.infrastructure.tasks.celery_app worker -Q ingest,inference -l info --concurrency=2
-celery -A app.infrastructure.tasks.celery_app beat -l info      # status refresh, offline sweep
-python scripts/simulate_device.py --code ... --images ./sample_images
+# Windows: --pool=solo (ADR-013). Deployed: a Linux container with the default pool.
+.\dev.ps1 worker            # celery -A app.worker.celery_app worker
+                            #   -Q ingest,inference,interactive,reports --pool=solo
+.\dev.ps1 api
+uv run python -m scripts.simulate_device --code <CODE> --images ./samples --count 4
 ```
+
+> The Celery app lives at **`app.worker.celery_app`**, not `app.infrastructure.tasks` —
+> tasks are a delivery mechanism, the exact counterpart of an HTTP route, so they sit in the
+> outermost layer beside `app.api`. Putting them in `infrastructure` made infrastructure
+> import the application layer, which the import contract rejects.
+>
+> Three queues: `ingest` (cheap, high concurrency), `inference` (models, concurrency 1-2),
+> and **`interactive`** for `POST /predict` and the `/model/status` probe, so a live request
+> never queues behind a backlog of captures (ADR-026).
 
 ## Testing procedure
 1. **Full E2E**: simulator uploads → within 10 s the image has a prediction, detections, and
@@ -117,12 +128,44 @@ Matching the original spec's `{"stage":"Walls","confidence":0.96,"progress":63}`
 the project-level number now properly distinguished from the per-image one.
 
 ## Done criteria
-- [ ] End-to-end: upload → prediction → detections → snapshot → updated project
-- [ ] Aggregator is pure, fully unit-tested, and matches the worked example in [[Progress-Calculation]]
-- [ ] Models loaded once per worker; latency within the NFR
-- [ ] Idempotent, replayable recomputation
-- [ ] 80 % ceiling and approval flow enforced
-- [ ] `/model/status` and `/predict` live
+- [x] End-to-end: upload → prediction → detections → snapshot → updated project
+- [x] Aggregator is pure, fully unit-tested, and matches the worked example in [[Progress-Calculation]]
+- [x] Models loaded once per worker; latency within the NFR (~25 ms/image on CPU with stubs)
+- [x] Idempotent, replayable recomputation
+- [x] 80 % ceiling and approval flow enforced
+- [x] `/model/status` and `/predict` live
+
+## Delivered (2026-08-14)
+
+Two sessions. The first landed everything that does not need a checkpoint — the pure
+aggregator, the stub models, the Celery worker, and `recompute`. The second landed the HTTP
+surface and ran the whole thing against live services.
+
+**Endpoints**
+
+| Method | Path |
+|---|---|
+| GET | `/projects/{id}/images/{image_id}` · `…/prediction` |
+| POST | `/projects/{id}/images/{image_id}/reprocess` |
+| GET | `/projects/{id}/history` · `…/progress` · `…/timeline` |
+| POST | `/projects/{id}/recompute` |
+| GET | `/model/status` · `/models` |
+| POST | `/predict` |
+
+**Verified end to end** against PostgreSQL + Redis + MinIO + a live worker, 39/39 checks:
+pair a simulated camera → 4 geotagged uploads → all 4 scored → progress **27.0 %**, macro
+stage `framing`, one snapshot → recompute idempotent (same value, no duplicate rows) →
+`/model/status` reporting a reachable worker on `cpu` at 25 ms mean → `POST /predict`
+answering in a 73 ms round trip and storing nothing → reprocess clearing and re-scoring one
+image without duplicating its row.
+
+**Not built here** (deliberately, and recorded in [[API-Contract]]): `POST /projects/{id}/images`
+(manual upload), `GET /projects/{id}/images` (superseded for now by `/history`), and
+`DELETE /images/{id}`. All are Module 04/12 surface rather than inference.
+
+**New decisions:** ADR-026 (`/predict` as a worker round trip on its own queue), ADR-027
+(image routes nested under their project), ADR-028 (`progress:recompute` permission),
+ADR-029 (the worker's engine is unpooled).
 
 ## Related
 [[Progress-Calculation]] · [[Construction-Stages]] · [[Module-07-Classifier-Training]] · [[Module-10-Reports-and-Remarks]] · [[Module-14-Realtime]]

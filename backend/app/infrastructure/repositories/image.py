@@ -5,11 +5,12 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.domain.entities import (
@@ -288,6 +289,35 @@ class SqlAlchemyPredictionRepository:
         await self._session.refresh(row)
         return to_prediction(row)
 
+    async def list_for_images(self, image_ids: Sequence[UUID]) -> dict[UUID, Prediction]:
+        """Predictions for many images at once, keyed by image id.
+
+        Exists so the history endpoint can join images to predictions in **two**
+        queries instead of one per image. At 50 images a page that is the
+        difference between 2 round trips and 51, and the N+1 version only starts
+        hurting once there is real capture history — i.e. during the defense.
+        """
+        if not image_ids:
+            return {}
+        stmt = select(models.PredictionModel).where(
+            models.PredictionModel.image_id.in_(list(image_ids))
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return {row.image_id: to_prediction(row) for row in rows}
+
+    async def delete_for_image(self, image_id: UUID) -> int:
+        """Remove an image's prediction, for reprocessing.
+
+        Reprocessing **replaces** rather than appends. Keeping both would be
+        better provenance, but two prediction rows for one photograph would both
+        satisfy ``list_eligible_in_window`` and the image would then vote twice
+        in its own aggregation window — a silent double-count that moves the
+        progress number. Superseding properly needs a column the schema does not
+        have; see ``Open-Questions.md`` Q11.
+        """
+        stmt = delete(models.PredictionModel).where(models.PredictionModel.image_id == image_id)
+        return affected_rows(await self._session.execute(stmt))
+
     async def list_eligible_in_window(
         self, project_id: UUID, start: datetime, end: datetime
     ) -> tuple[Prediction, ...]:
@@ -399,9 +429,7 @@ class SqlAlchemySnapshotRepository:
 
     async def delete_for_project(self, project_id: UUID) -> int:
         """Remove every snapshot, for a full timeline recompute."""
-        from sqlalchemy import delete as sa_delete
-
-        stmt = sa_delete(models.ProgressSnapshotModel).where(
+        stmt = delete(models.ProgressSnapshotModel).where(
             models.ProgressSnapshotModel.project_id == project_id
         )
         result = await self._session.execute(stmt)
@@ -486,9 +514,7 @@ class SqlAlchemyDetectionRepository:
 
     async def delete_for_image(self, image_id: UUID) -> int:
         """Remove every detection for an image, before reprocessing it."""
-        from sqlalchemy import delete as sql_delete
-
         result = await self._session.execute(
-            sql_delete(models.DetectionModel).where(models.DetectionModel.image_id == image_id)
+            delete(models.DetectionModel).where(models.DetectionModel.image_id == image_id)
         )
         return affected_rows(result)

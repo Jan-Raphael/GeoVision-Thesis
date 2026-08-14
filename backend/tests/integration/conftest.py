@@ -123,6 +123,7 @@ async def app(session: AsyncSession, test_settings: Settings) -> AsyncIterator[F
     request writes is rolled back with the test and never touches the
     development database.
     """
+    from app.infrastructure.ai.gateway import reset_inference_gateway
     from app.infrastructure.cache import reset_nonce_cache
     from app.infrastructure.db.session import get_session
     from app.infrastructure.queue import reset_task_queue
@@ -130,12 +131,15 @@ async def app(session: AsyncSession, test_settings: Settings) -> AsyncIterator[F
     from app.main import create_app
 
     reset_storage()
-    # Both are process-wide singletons built on first use. Without this reset a
+    # All process-wide singletons built on first use. Without this reset a
     # cache constructed from *another* test's settings would be reused, and a
     # nonce claimed in one test would make the next one's identical nonce look
-    # like a replay.
+    # like a replay. The inference gateway is here for the same reason: a test
+    # that overrides it with a fake would otherwise leave that fake in place for
+    # every test after it.
     reset_nonce_cache()
     reset_task_queue()
+    reset_inference_gateway()
     application = create_app(test_settings)
     # The limiter is a module-level singleton built from the *global* settings
     # at import time, so `rate_limit_enabled=False` in test settings cannot

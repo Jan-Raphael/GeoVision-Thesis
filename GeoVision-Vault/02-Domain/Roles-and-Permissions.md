@@ -47,6 +47,7 @@ Legend: ✅ allowed · 🔒 only if project/profile is `public` · ❌ denied
 | Pair / unpair a device | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Set capture schedule / weights | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Generate reports | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Re-run the AI** (reprocess an image, recompute progress) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **Approve final 20 %** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Invite / remove members | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Change project visibility | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -73,6 +74,7 @@ class Permission(StrEnum):
     DEVICE_MANAGE = "device:manage"
     ASSET_UPLOAD = "asset:upload"
     IMAGE_UPLOAD = "image:upload"
+    PROGRESS_RECOMPUTE = "progress:recompute"
     REMARK_WRITE = "remark:write"
     REPORT_GENERATE = "report:generate"
     PROJECT_APPROVE = "project:approve"

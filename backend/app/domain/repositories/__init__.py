@@ -11,6 +11,7 @@ from app.domain.repositories.base import Page, ReadRepository, WriteRepository
 from app.domain.repositories.protocols import (
     AIModelRepository,
     ContactMessageRepository,
+    DetectionRepository,
     DeviceRepository,
     ImageRepository,
     NotificationRepository,
@@ -29,6 +30,7 @@ from app.domain.repositories.protocols import (
 __all__ = [
     "AIModelRepository",
     "ContactMessageRepository",
+    "DetectionRepository",
     "DeviceRepository",
     "ImageRepository",
     "NotificationRepository",

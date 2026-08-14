@@ -25,6 +25,7 @@ from fastapi import Depends, Path, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.ports.inference_gateway import InferenceGateway
 from app.application.ports.storage import ObjectStorage
 from app.application.ports.task_queue import TaskQueue
 from app.core import device_auth
@@ -41,6 +42,7 @@ from app.infrastructure.db.session import get_session
 from app.infrastructure.repositories import (
     SqlAlchemyAIModelRepository,
     SqlAlchemyContactMessageRepository,
+    SqlAlchemyDetectionRepository,
     SqlAlchemyDeviceRepository,
     SqlAlchemyImageRepository,
     SqlAlchemyNotificationRepository,
@@ -136,6 +138,11 @@ def get_prediction_repository(session: SessionDep) -> SqlAlchemyPredictionReposi
     return SqlAlchemyPredictionRepository(session)
 
 
+def get_detection_repository(session: SessionDep) -> SqlAlchemyDetectionRepository:
+    """Provide the detection repository."""
+    return SqlAlchemyDetectionRepository(session)
+
+
 def get_snapshot_repository(session: SessionDep) -> SqlAlchemySnapshotRepository:
     """Provide the progress-snapshot repository."""
     return SqlAlchemySnapshotRepository(session)
@@ -198,6 +205,7 @@ PairingTokenRepoDep = Annotated[
 ]
 ImageRepoDep = Annotated[SqlAlchemyImageRepository, Depends(get_image_repository)]
 PredictionRepoDep = Annotated[SqlAlchemyPredictionRepository, Depends(get_prediction_repository)]
+DetectionRepoDep = Annotated[SqlAlchemyDetectionRepository, Depends(get_detection_repository)]
 SnapshotRepoDep = Annotated[SqlAlchemySnapshotRepository, Depends(get_snapshot_repository)]
 RemarkRepoDep = Annotated[SqlAlchemyRemarkRepository, Depends(get_remark_repository)]
 AssetRepoDep = Annotated[SqlAlchemyReferenceAssetRepository, Depends(get_asset_repository)]
@@ -319,6 +327,23 @@ def get_task_queue(settings: SettingsDep) -> TaskQueue:
 
 
 TaskQueueDep = Annotated[TaskQueue, Depends(get_task_queue)]
+
+
+def get_gateway(settings: SettingsDep) -> InferenceGateway:
+    """Provide the request/response channel to the inference worker.
+
+    Distinct from :data:`TaskQueueDep`, which is fire-and-forget. Two endpoints
+    need an *answer* from a model, and the API may not load one itself
+    (ADR-011), so they ask a worker and wait. Imported lazily for the same
+    reason the queue is: nothing should pull Celery in at module import time.
+    """
+    from app.infrastructure.ai.gateway import get_inference_gateway
+
+    gateway: InferenceGateway = get_inference_gateway(settings)
+    return gateway
+
+
+InferenceGatewayDep = Annotated[InferenceGateway, Depends(get_gateway)]
 
 
 async def get_current_device(

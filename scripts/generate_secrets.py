@@ -31,6 +31,10 @@ GENERATORS: dict[str, "object"] = {
     "GV_JWT_SECRET_KEY": lambda: secrets.token_urlsafe(64),
     "GV_POSTGRES_PASSWORD": lambda: secrets.token_hex(16),
     "GV_S3_SECRET_KEY": lambda: secrets.token_hex(16),
+    # Encrypts every paired camera's HMAC secret at rest (ADR-020). Generated
+    # like any other secret, but it is the one with no recovery path: rotate or
+    # lose it and every deployed camera must be re-paired by hand, on site.
+    "GV_DEVICE_SECRET_KEY": lambda: secrets.token_urlsafe(48),
 }
 
 

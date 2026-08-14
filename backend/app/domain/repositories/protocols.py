@@ -14,6 +14,7 @@ without a database.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
@@ -21,6 +22,8 @@ from uuid import UUID
 from app.domain.entities import (
     AIModel,
     ContactMessage,
+    Detection,
+    DetectionSummary,
     Device,
     Image,
     Notification,
@@ -48,6 +51,7 @@ from app.domain.value_objects import ProjectCode
 __all__ = [
     "AIModelRepository",
     "ContactMessageRepository",
+    "DetectionRepository",
     "DeviceRepository",
     "ImageRepository",
     "NotificationRepository",
@@ -405,10 +409,52 @@ class PredictionRepository(Protocol):
         """Store a prediction."""
         ...
 
+    async def list_for_images(self, image_ids: Sequence[UUID]) -> dict[UUID, Prediction]:
+        """Predictions for many images at once, keyed by image id.
+
+        Batched so the history endpoint joins images to predictions without one
+        query per row.
+        """
+        ...
+
+    async def delete_for_image(self, image_id: UUID) -> int:
+        """Remove an image's prediction, so reprocessing replaces it."""
+        ...
+
     async def list_eligible_in_window(
         self, project_id: UUID, start: datetime, end: datetime
     ) -> tuple[Prediction, ...]:
         """Confidence-passing predictions in a window, for aggregation."""
+        ...
+
+
+class DetectionRepository(Protocol):
+    """Detector outputs: individual boxes and their per-image summary.
+
+    Boxes and summary are stored separately because they are read separately.
+    The lightbox overlay wants every box; the reports and corroboration rules
+    want only the counts, and making them page through a hundred boxes to add
+    them up would be work done for nothing.
+    """
+
+    async def add(self, detection: Detection) -> Detection:
+        """Store one detected object."""
+        ...
+
+    async def list_for_image(self, image_id: UUID) -> tuple[Detection, ...]:
+        """Every box found in an image, for the detection overlay."""
+        ...
+
+    async def add_summary(self, summary: DetectionSummary) -> DetectionSummary:
+        """Store the per-image object counts."""
+        ...
+
+    async def get_summary(self, image_id: UUID) -> DetectionSummary | None:
+        """Return an image's object counts."""
+        ...
+
+    async def delete_for_image(self, image_id: UUID) -> int:
+        """Remove an image's detections, for reprocessing."""
         ...
 
 

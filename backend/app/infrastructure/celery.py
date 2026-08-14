@@ -6,7 +6,7 @@ run on it live in ``app.worker`` — putting them here would make infrastructure
 import the application layer, which is the wrong direction and which the import
 contract rejects.
 
-Two queues, deliberately separated:
+Three queues, deliberately separated:
 
 ``ingest``
     Short, cheap, I/O-bound work. High concurrency is fine.
@@ -16,6 +16,11 @@ Two queues, deliberately separated:
     spawning four threads and fighting each other for the same cores — it makes
     throughput worse, not better, and the symptom is a machine at 100 % CPU
     processing fewer images than it did with one worker.
+``interactive``
+    The same model work, but with somebody waiting on an HTTP response for it —
+    ``POST /predict`` and the ``/model/status`` probe. Split out so a queue of
+    captured images cannot delay a live request; the whole point of the demo
+    endpoint is that it answers while a person is looking at it.
 
 On Windows the prefork pool does not work; run with ``--pool=solo`` (ADR-013).
 The deployed worker is a Linux container, where prefork is correct.
@@ -65,6 +70,12 @@ celery_app.conf.update(
     task_routes={
         "inference.process_image": {"queue": "inference"},
         "progress.recompute_window": {"queue": "inference"},
+        # Separate queue on purpose: an HTTP request is blocked on each of
+        # these. Sharing `inference` would put the live demo behind whatever
+        # backlog of captures happens to exist, and it would time out for
+        # reasons unrelated to whether it works.
+        "inference.predict_adhoc": {"queue": "interactive"},
+        "inference.service_status": {"queue": "interactive"},
     },
     result_expires=3600,
     # Fail fast when the broker is unreachable. The producer is a web request

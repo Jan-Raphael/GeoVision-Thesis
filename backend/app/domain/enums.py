@@ -311,3 +311,8 @@ class Permission(StrEnum):
     IMAGE_UPLOAD = "image:upload"
     REMARK_WRITE = "remark:write"
     REPORT_GENERATE = "report:generate"
+    #: Re-run the AI over already-stored data: reprocess one image, or rebuild a
+    #: project's whole progress timeline. Separate from ``PROJECT_EDIT`` because
+    #: it rewrites the headline figure the project is judged on rather than its
+    #: descriptive fields, and the API contract puts it at manager+ (ADR-026).
+    PROGRESS_RECOMPUTE = "progress:recompute"
