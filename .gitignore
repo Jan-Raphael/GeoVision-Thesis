@@ -132,3 +132,6 @@ GeoVision-Vault/.trash/
 logs/
 tmp/
 .scratch/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

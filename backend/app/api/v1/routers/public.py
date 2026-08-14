@@ -28,6 +28,7 @@ from app.api.deps import (
     ProjectRepoDep,
     RemarkRepoDep,
     SnapshotRepoDep,
+    StorageDep,
     UserAgentDep,
     UserRepoDep,
 )
@@ -38,7 +39,7 @@ from app.api.schemas.projects import (
     PublicProjectResponse,
     TimelinePointResponse,
 )
-from app.api.v1.presenters import present_public_project, present_summary
+from app.api.v1.presenters import present_public_project, present_summary, sign_thumbnails
 from app.application.use_cases.content import SubmitContactMessage
 from app.application.use_cases.projects import GetProjectFolder
 from app.core.exceptions import NotFoundError
@@ -95,6 +96,7 @@ async def public_project(
     assets: AssetRepoDep,
     snapshots: SnapshotRepoDep,
     users: UserRepoDep,
+    storage: StorageDep,
     clock: ClockDep,
     viewer: OptionalUser,
 ) -> PublicProjectResponse:
@@ -126,7 +128,7 @@ async def public_project(
     folder = await GetProjectFolder(
         projects, members, devices, images, remarks, assets, snapshots, users, clock=clock
     ).execute(access, public_only=True)
-    return present_public_project(folder)
+    return present_public_project(folder, await sign_thumbnails(storage, folder.recent_images))
 
 
 @router.get(

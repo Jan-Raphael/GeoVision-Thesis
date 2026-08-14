@@ -2,8 +2,8 @@
 title: Module 11 — Public Dashboard
 type: module
 module: 11
-status: planned
-updated: 2026-08-12
+status: done
+updated: 2026-08-15
 ---
 
 # Module 11 — Public Dashboard (visitors, not logged in)
@@ -78,11 +78,47 @@ progress, timeline, and last geotagged capture, click through to the map, view t
 public profile, search, and register — matching spec section A exactly.
 
 ## Done criteria
-- [ ] All public routes implemented and responsive
-- [ ] Visibility rules provably respected in the UI
-- [ ] Timeline + stage bars + progress ring correct against seed data
-- [ ] Search and contact working
-- [ ] E2E visitor journey passes
+- [x] All public routes implemented and responsive
+- [x] Visibility rules provably respected in the UI
+- [x] Timeline + stage bars + progress ring correct against seed data
+- [x] Search and contact working
+- [ ] E2E visitor journey passes — *Playwright deferred to [[Module-15-Testing-and-Evaluation]], which owns the browser suite*
+
+## Delivered (2026-08-15)
+
+| Route | Page |
+|---|---|
+| `/` | feed, with URL-backed filters (q, status, stage) |
+| `/projects/:code` | progress ring, five stage bars, timeline, captures, remarks, handler, map links |
+| `/users/:username` | public profile, or the private-account notice |
+| `/search` | tabs over projects, owners, locations |
+| `/contact` | form with success and failure states |
+| `/login`, `/register` | honest placeholders — Module 12 owns auth |
+| `*` | not-found |
+
+**19 component tests**, TypeScript strict with `exactOptionalPropertyTypes`, ESLint clean.
+
+The tests that matter are the ones about **what a visitor is told**: that the figure is
+labelled "AI estimate" and only says "Verified" at 100 %; that the Approval bar explains it
+requires an inspection; that a private profile renders exactly two lines and nothing else
+(asserted on `textContent`, so a future field cannot slip in); and that a private project
+reads as *"not available"* rather than as an error — a visitor must not be able to tell a
+private project from one that never existed.
+
+**Bundle, after code-splitting:** the landing page is **77 kB gzipped**; the project page's
+chart chunk (110 kB gzipped, almost all Recharts) loads only when someone opens a project.
+The chart lives in its own module for exactly this reason — importing it from the shared
+component file pulled Recharts into the homepage, which was 186 kB before the split.
+
+**Two backend gaps this module surfaced and one it fixed.** Fixed: image payloads carried
+`thumb_key`, a storage key no browser can render, so nothing could display a photograph
+anywhere — they now carry a signed `thumb_url`. Open (Q13): the feed omits `owner` and
+`latest_image`, and search returns no locations index.
+
+**`MiniMap` was not built.** MapLibre is ~200 kB for an embedded tile view of a single pin,
+on a page that already links out to Google Maps and OpenStreetMap and shows copyable
+coordinates. The dependency was removed rather than left unused; revisit in Module 12, where
+an authenticated folder showing several cameras has more to put on a map.
 
 ## Related
 [[Roles-and-Permissions]] · [[API-Contract]] · [[Module-12-Owner-Dashboard]] · [[Construction-Stages]]

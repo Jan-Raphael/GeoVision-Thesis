@@ -1,66 +1,93 @@
-import { useEffect, useState } from 'react';
-import { fetchHealth, type HealthResponse } from '@/lib/api';
+/**
+ * The public application: router, query client, routes.
+ *
+ * Every route here is reachable without an account — Module 11 is spec section
+ * A in full. The authenticated routes mount alongside these in Module 12.
+ */
+
+import { QueryClientProvider } from '@tanstack/react-query';
+import { Suspense, lazy } from 'react';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+
+import { PublicLayout } from '@/app/layout';
+import { SkeletonGrid } from '@/components/common';
+import { createQueryClient } from '@/lib/query-client';
+import { FeedPage } from '@/pages/feed';
+import { AuthPlaceholderPage, NotFoundPage } from '@/pages/misc';
 
 /**
- * Module 01 placeholder shell.
+ * Everything except the homepage is loaded on demand.
  *
- * Its only job is to prove the toolchain end to end: React renders, Tailwind
- * applies, TypeScript type-checks in strict mode, and the Vite dev proxy
- * reaches the FastAPI backend. Real routing arrives in Module 11.
+ * The project page pulls in Recharts, which is roughly two thirds of the
+ * bundle on its own. Making the first paint of the *homepage* wait for a chart
+ * library it never renders is the difference between a fast feed and a slow
+ * one, and the feed is what a visitor lands on.
  */
-export function App() {
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const ProjectPage = lazy(() =>
+  import('@/pages/project').then((module) => ({ default: module.ProjectPage })),
+);
+const ProfilePage = lazy(() =>
+  import('@/pages/misc').then((module) => ({ default: module.ProfilePage })),
+);
+const SearchPage = lazy(() =>
+  import('@/pages/misc').then((module) => ({ default: module.SearchPage })),
+);
+const ContactPage = lazy(() =>
+  import('@/pages/misc').then((module) => ({ default: module.ContactPage })),
+);
 
-  useEffect(() => {
-    fetchHealth()
-      .then(setHealth)
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      });
-  }, []);
-
+/** The route table, exported so tests can mount it under a memory router. */
+export function PublicRoutes() {
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
-        <header>
-          <h1 className="text-3xl font-semibold tracking-tight">GeoVision</h1>
-          <p className="mt-1 text-slate-600">
-            Smart Construction Monitoring Using AI and Geotagging
-          </p>
-        </header>
+    <Routes>
+      <Route element={<PublicLayout />}>
+        <Route index element={<FeedPage />} />
+        <Route
+          path="projects/:projectCode"
+          element={
+            <Suspense fallback={<SkeletonGrid count={1} />}>
+              <ProjectPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="users/:username"
+          element={
+            <Suspense fallback={<SkeletonGrid count={1} />}>
+              <ProfilePage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="search"
+          element={
+            <Suspense fallback={<SkeletonGrid count={2} />}>
+              <SearchPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="contact"
+          element={
+            <Suspense fallback={<SkeletonGrid count={1} />}>
+              <ContactPage />
+            </Suspense>
+          }
+        />
+        <Route path="login" element={<AuthPlaceholderPage mode="login" />} />
+        <Route path="register" element={<AuthPlaceholderPage mode="register" />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
+  );
+}
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-slate-500">
-            Backend connection
-          </h2>
-
-          {health && (
-            <dl className="mt-3 grid grid-cols-2 gap-y-1 text-sm">
-              <dt className="text-slate-500">Status</dt>
-              <dd className="font-medium text-emerald-700">{health.status}</dd>
-              <dt className="text-slate-500">Version</dt>
-              <dd className="font-mono">{health.version}</dd>
-              <dt className="text-slate-500">Environment</dt>
-              <dd className="font-mono">{health.environment}</dd>
-            </dl>
-          )}
-
-          {error && (
-            <p className="mt-3 text-sm text-amber-700">
-              Cannot reach the API ({error}). Start it with{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">.\dev.ps1 api</code>
-            </p>
-          )}
-
-          {!health && !error && <p className="mt-3 text-sm text-slate-500">Checking…</p>}
-        </section>
-
-        <p className="text-sm text-slate-500">
-          Module 01 scaffold. The public dashboard is built in Module 11 — see{' '}
-          <code className="font-mono">GeoVision-Vault/03-Modules/Build-Order.md</code>.
-        </p>
-      </div>
-    </main>
+export function App() {
+  return (
+    <QueryClientProvider client={createQueryClient()}>
+      <BrowserRouter>
+        <PublicRoutes />
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }

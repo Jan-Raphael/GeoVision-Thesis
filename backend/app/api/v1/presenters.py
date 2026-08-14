@@ -12,6 +12,7 @@ forgotten.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from app.api.schemas.projects import (
@@ -45,6 +46,8 @@ if TYPE_CHECKING:
     )
     from app.domain.enums import DeviceStatus
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
     "present_asset",
     "present_device",
@@ -53,6 +56,7 @@ __all__ = [
     "present_public_project",
     "present_remark",
     "present_summary",
+    "sign_thumbnails",
 ]
 
 
@@ -83,7 +87,7 @@ def present_member(member: ProjectMember, user: User | None = None) -> MemberRes
     )
 
 
-def _image(image: Image) -> ImageSummaryResponse:
+def _image(image: Image, thumb_urls: dict[str, str] | None = None) -> ImageSummaryResponse:
     """A capture with its geotag and a map link."""
     return ImageSummaryResponse(
         id=image.id,
@@ -92,6 +96,7 @@ def _image(image: Image) -> ImageSummaryResponse:
         latitude=image.location.latitude if image.location else None,
         longitude=image.location.longitude if image.location else None,
         thumb_key=image.thumb_key,
+        thumb_url=(thumb_urls or {}).get(image.thumb_key or ""),
         device_id=image.device_id,
         status=image.status.value,
         map_url=(
@@ -187,6 +192,7 @@ def present_folder(
     now: datetime,
     member_users: dict[str, User] | None = None,
     asset_urls: dict[str, str] | None = None,
+    thumb_urls: dict[str, str] | None = None,
 ) -> ProjectFolderResponse:
     """Render the authenticated project folder page.
 
@@ -196,6 +202,8 @@ def present_folder(
         member_users: ``{str(user_id): User}`` so collaborators show names
             rather than bare ids.
         asset_urls: ``{str(asset_id): url}`` for downloadable assets.
+        thumb_urls: ``{thumb_key: url}`` so captures render as pictures rather
+            than as storage keys no browser can resolve.
 
     Returns:
         The complete folder payload, including this caller's permissions.
@@ -240,7 +248,7 @@ def present_folder(
             present_member(member, users.get(str(member.user_id))) for member in folder.members
         ],
         devices=[present_device(device) for device in folder.devices],
-        recent_images=[_image(image) for image in folder.recent_images],
+        recent_images=[_image(image, thumb_urls) for image in folder.recent_images],
         remarks=[present_remark(remark) for remark in folder.remarks],
         assets=[present_asset(asset, urls.get(str(asset.id))) for asset in folder.assets],
         timeline=_timeline(folder.timeline),
@@ -252,7 +260,9 @@ def present_folder(
     )
 
 
-def present_public_project(folder: ProjectFolder) -> PublicProjectResponse:
+def present_public_project(
+    folder: ProjectFolder, thumb_urls: dict[str, str] | None = None
+) -> PublicProjectResponse:
     """Render the anonymous view of a project.
 
     A distinct response model, not a filtered copy of the authenticated one.
@@ -290,11 +300,36 @@ def present_public_project(folder: ProjectFolder) -> PublicProjectResponse:
         handler_is_public=owner_is_public,
         # Only remarks and captures; the folder was already assembled with
         # `public_only=True`, so nothing private reached this point either.
-        recent_images=[_image(image) for image in folder.recent_images],
+        recent_images=[_image(image, thumb_urls) for image in folder.recent_images],
         remarks=[present_remark(remark) for remark in folder.remarks],
         timeline=_timeline(folder.timeline),
         last_capture_at=project.last_capture_at,
     )
+
+
+async def sign_thumbnails(storage: object, images: object) -> dict[str, str]:
+    """Sign every distinct thumbnail key in *images*, keyed by that key.
+
+    Signing is local computation, not a round trip — presigning an S3 URL is a
+    HMAC over the request — so doing it per card is cheap. Distinct keys only,
+    because two captures can share a thumbnail after a reprocess.
+
+    A key that cannot be signed is simply absent from the map, and the image
+    renders without a picture rather than failing the whole page: a storage
+    hiccup should not take down a public project view whose main content is the
+    progress figure.
+    """
+    urls: dict[str, str] = {}
+    for image in images:  # type: ignore[attr-defined]
+        key = getattr(image, "thumb_key", None)
+        if not key or key in urls:
+            continue
+        try:
+            urls[key] = await storage.signed_url(key)  # type: ignore[attr-defined]
+        except Exception:
+            logger.warning("could not sign thumbnail %s; rendering without it", key)
+            continue
+    return urls
 
 
 def map_url_for(latitude: float, longitude: float) -> str:

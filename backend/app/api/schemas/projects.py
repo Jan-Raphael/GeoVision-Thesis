@@ -251,6 +251,10 @@ class ImageSummaryResponse(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     thumb_key: str | None = None
+    #: A signed, time-limited URL for the thumbnail. `thumb_key` alone is a
+    #: storage key, which no browser can render — every image surface needs
+    #: this, so it is produced at the presenter rather than by each caller.
+    thumb_url: str | None = None
     device_id: UUID | None = None
     status: str
     map_url: str | None = None

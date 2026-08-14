@@ -34,7 +34,7 @@ from app.api.schemas.projects import (
     UpdateProjectRequest,
     VisibilityRequest,
 )
-from app.api.v1.presenters import present_folder, present_summary
+from app.api.v1.presenters import present_folder, present_summary, sign_thumbnails
 from app.application.use_cases.projects import (
     ApproveProject,
     ArchiveProject,
@@ -150,7 +150,13 @@ async def get_project_folder(
         str(asset.id): await storage.signed_url(asset.storage_key) for asset in folder.assets
     }
 
-    return present_folder(folder, now=clock.now(), member_users=member_users, asset_urls=asset_urls)
+    return present_folder(
+        folder,
+        now=clock.now(),
+        member_users=member_users,
+        asset_urls=asset_urls,
+        thumb_urls=await sign_thumbnails(storage, folder.recent_images),
+    )
 
 
 @router.patch(

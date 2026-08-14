@@ -82,7 +82,7 @@ flowchart LR
 | 08 | ⏸ **blocked** | | | Needs the dataset. |
 | 09 | ✅ **done** | 2026-08-14 | 2026-08-14 | Progress engine, stub models, worker, and the full HTTP surface. 765 tests. Verified end to end against live PostgreSQL + Redis + MinIO + worker (39/39): upload → prediction → 27.0 % progress → `/predict` → reprocess. Built ahead of 07/08 against a deterministic stub, which unblocked 10-14. ADR-026…029; the E2E caught a worker bug no test could see (ADR-029). |
 | 10 | ✅ **done** | 2026-08-14 | 2026-08-15 | Built in two passes. **Reports:** PDF (9 sections, 3 charts, required disclaimer), CSV (two tables), period rules, `reports.generate`, 4 endpoints. **Maintenance:** the message table as a pure domain service, and four idempotent beat jobs — status refresh, deduplicated system remarks, device offline sweep with owner notification, report retention. **832 tests.** ADR-030. |
-| 11 | planned | | | |
+| 11 | ✅ **done** | 2026-08-15 | 2026-08-15 | Full anonymous surface: feed, project folder, profile, search, contact, auth placeholders, 404. 19 component tests; TS strict; landing bundle 77 kB gzip after code-splitting Recharts onto the project route. Fixed a systemic gap — image payloads had no signed URL, so no photograph could render anywhere. Q13 logged. |
 | 12 | planned | | | |
 | 13 | planned | | | |
 | 14 | planned | | | |

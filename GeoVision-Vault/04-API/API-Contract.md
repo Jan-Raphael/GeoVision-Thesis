@@ -25,9 +25,9 @@ Original spec endpoints (`/upload`, `/predict`, `/history`, `/projects`, `/repor
 | GET | `/public/feed` | Homepage feed of public projects. Returns `project_code, name, intended_use, location_label, lat, lon, progress_pct, macro_stage, status, latest_image{thumb_url, captured_at, lat, lon}, owner{username, display_name, is_public}`. Filters: `?near=lat,lon&radius_km=&stage=&q=&sort=recent\|progress`. |
 | GET | `/public/projects/{project_code}` | Public project folder: everything the owner marked public — progress, per-stage %, deadline, status, handler, public remarks, recent geotagged images, `map_url`. |
 | GET | `/public/projects/{project_code}/timeline` | Snapshot series for the graph: `[{window_start, displayed_pct, macro_stage}]`. `?from=&to=&granularity=daily\|weekly`. |
-| GET | `/public/projects/{project_code}/images` | Public image feed (thumbs + GPS + timestamp), paginated. |
+| GET | `/public/projects/{project_code}/images` | Public image feed (thumbs + GPS + timestamp), paginated. *Not implemented — `/public/projects/{code}` already embeds `recent_images`.* |
 | GET | `/public/users/{username}` | Public profile, or `{"username": "...", "is_private": true}` with no other fields. |
-| GET | `/public/search` | Unified search. `?q=&type=user\|project\|location&limit=`. Returns typed results. Rate-limited. |
+| GET | `/public/search` | Unified search. `?q=&limit=`. Returns `{query, projects[], users[]}`. Rate-limited 30/min. **No `locations` array** — the contract's Locations tab is derived client-side from the project matches, which carry `location_label` and coordinates (Q13). |
 | POST | `/public/contact` | Contact Us. Body `{name, email, subject, message}` + captcha token. Rate-limited. |
 
 404 (not 403) for private resources — do not leak existence.
@@ -127,6 +127,13 @@ Headers: `X-Device-Id`, `X-Timestamp`, `X-Nonce`, `X-Signature` — see
 > A duplicate returns `201` with `duplicate: true` rather than `200`: the capture is stored
 > and the outcome from the camera's point of view is identical, and firmware that branches on
 > the status code is firmware that can get the two paths wrong.
+
+> **Image payloads carry `thumb_url`, not just `thumb_key`** (2026-08-15). A storage key is
+> not something a browser can render, so every image surface — the public project page, the
+> authenticated folder, and Module 12's lightbox — needs a signed URL. Presigning is local
+> computation rather than a round trip, so it is done per payload at the presenter; a key that
+> cannot be signed is simply absent and the capture renders without a picture rather than
+> failing the page.
 
 ## Images & Assets
 
