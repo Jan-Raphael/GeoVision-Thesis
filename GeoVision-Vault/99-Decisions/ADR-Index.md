@@ -599,6 +599,33 @@ of the hottest unauthenticated path in the system to solve what one `commit()` s
 
 ---
 
+## ADR-033 - A config guard whose test value differs from its default has an untested branch
+**Status:** Accepted 2026-08-15
+**Context.** The API would not start. `create_app` built fine, 668 tests passed, mypy was clean
+and all four import contracts held - and `uvicorn app.main:app` with no overrides died on
+`NameError: name 'RealtimeSubscriber' is not defined`, so registration from the dashboard
+surfaced as a bare "Request failed with 500" (Vite reports a dead upstream as a 500). The name
+had been moved under `if TYPE_CHECKING:` while fixing a mypy complaint, but `_start_realtime`
+still used it at runtime. It was invisible because the line only runs when
+`task_queue_backend == "celery"` - the **default** - while every test builds settings with
+`"logging"` and takes the early return one line above it. The test suite could not have caught
+this, at any size.
+**Decision.** Where a branch is selected by configuration, the tests exercise **every** branch,
+including the default that tests themselves do not use; and where startup is involved they run
+the lifespan, not just `create_app`. `tests/unit/test_app_boots.py` does this: both queue
+backends, the lifespan entered and exited for real, and a pin that `celery` is still the default
+so the coverage cannot silently lapse if that changes.
+**Consequences.** Reverting the fix turns three of those eight tests red, so the regression is
+genuinely pinned rather than merely described. The general rule is worth more than the fix:
+**a test-only configuration value is an untested code path wherever it differs from production**,
+and this project has several - `storage_backend`, `nonce_cache_backend`, `task_queue_backend`.
+Each is a place where green tests prove less than they appear to.
+**Rejected.** Making `logging` the default so tests and production agree - it would hide the real
+asymmetry and disable realtime for every developer. Also rejected: relying on a smoke test in CI
+only; the failure belongs in the fast unit suite, where it costs 0.2 s.
+
+---
+
 ## Template
 ```markdown
 ## ADR-NNN — <title>

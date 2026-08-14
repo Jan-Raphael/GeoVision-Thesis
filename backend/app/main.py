@@ -102,7 +102,11 @@ def _start_realtime(settings: Settings) -> RealtimeSubscriber | None:
     """
     if settings.task_queue_backend != "celery":
         return None
-    from app.infrastructure.realtime import get_hub
+    # Imported here, at runtime, *and* under TYPE_CHECKING for the annotation.
+    # Getting this wrong once already stopped the app booting under its default
+    # configuration while every test passed, because the tests take the
+    # early return above (ADR-033).
+    from app.infrastructure.realtime import RealtimeSubscriber, get_hub
 
     return RealtimeSubscriber(settings.redis_url, get_hub())
 
