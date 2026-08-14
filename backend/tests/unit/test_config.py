@@ -16,6 +16,9 @@ def _base(**overrides: object) -> Settings:
         "jwt_secret_key": "a" * 64,
         "postgres_password": "b" * 32,
         "s3_secret_key": "c" * 32,
+        # Encrypts device secrets at rest (Module 05, ADR-020). Required in
+        # deployed environments: without it, no paired camera could authenticate.
+        "device_secret_key": "d" * 32,
         # Filesystem storage is refused in deployed environments, so a valid
         # production Settings must name a real backend.
         "storage_backend": "s3",
@@ -63,7 +66,7 @@ class TestSecretPolicy:
 
     @pytest.mark.parametrize(
         "missing",
-        ["jwt_secret_key", "postgres_password", "s3_secret_key"],
+        ["jwt_secret_key", "postgres_password", "s3_secret_key", "device_secret_key"],
     )
     def test_production_refuses_to_start_without_a_secret(self, missing: str) -> None:
         with pytest.raises(ValidationError, match="Missing required secrets"):
@@ -117,7 +120,7 @@ class TestSecretsAreNotLeaked:
 
     @pytest.mark.parametrize(
         "field",
-        ["jwt_secret_key", "postgres_password", "s3_secret_key"],
+        ["jwt_secret_key", "postgres_password", "s3_secret_key", "device_secret_key"],
     )
     def test_secret_absent_from_repr(self, field: str) -> None:
         settings = _base()

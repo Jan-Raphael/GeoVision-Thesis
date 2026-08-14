@@ -278,15 +278,19 @@ class DeviceRepository(Protocol):
         """Whether a project already has a camera on *face*."""
         ...
 
-    async def get_secret_hash(self, device_id: UUID) -> str | None:
-        """Return the HMAC secret hash for request signature verification."""
+    async def get_secret(self, device_id: UUID, encryption_key: str) -> str | None:
+        """Return the device's decrypted HMAC secret, or ``None``.
+
+        Encrypted rather than hashed at rest: verifying an HMAC requires the key
+        itself, not a digest of it (ADR-020).
+        """
         ...
 
     async def list_stale(self, since: datetime) -> tuple[Device, ...]:
         """Devices not seen since *since* — drives the offline sweep."""
         ...
 
-    async def add(self, device: Device, secret_hash: str) -> Device:
+    async def add(self, device: Device, secret_encrypted: str) -> Device:
         """Create a device at pairing time."""
         ...
 
@@ -303,6 +307,14 @@ class DeviceRepository(Protocol):
         rssi_dbm: int | None = None,
     ) -> None:
         """Update liveness fields without loading the whole entity."""
+        ...
+
+    async def revoke(self, device_id: UUID, revoked_at: datetime) -> bool:
+        """Unpair a device: mark it revoked and wipe its stored secret.
+
+        Historical images are deliberately kept - swapping failed hardware must
+        not rewrite a project's progress history.
+        """
         ...
 
 

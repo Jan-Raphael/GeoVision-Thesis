@@ -2,7 +2,7 @@
 title: Device Pairing Protocol
 type: hardware
 status: canonical
-updated: 2026-08-12
+updated: 2026-08-14
 ---
 
 # Device Pairing & Authentication Protocol
@@ -64,7 +64,17 @@ Server, in a single transaction:
 1. `token_hash` lookup → must exist, be unexpired, unused.
 2. Create the `devices` row: `device_name = ESP_<project_code>_<FACE>`, default `weight`
    from the face table, default `capture_schedule` from the project.
-3. Generate `device_secret` — 32 random bytes, base64url. **Store only its hash.**
+3. Generate `device_secret` — 32 random bytes, base64url. **Store it encrypted**, in
+   `devices.secret_encrypted` (Fernet, keyed on `GV_DEVICE_SECRET_KEY`) — see
+   [[ADR-Index|ADR-020]].
+
+   > **Corrected 2026-08-14.** This step previously said "store only its hash", which is
+   > not implementable: Phase 3 computes `HMAC_SHA256(device_secret, …)` server-side, and
+   > a MAC key must be **recoverable**, not one-way hashed. A hash would make every
+   > signed request unverifiable. Encryption at rest gives the same protection against a
+   > database dump — the ciphertext is useless without the key, which lives in the
+   > environment — while keeping the key usable. Pairing *codes* are still hashed
+   > (step 1); they are only ever compared, never used as a key.
 4. Mark the token used, bind `hardware_id`, write an `audit_log` row, emit `device.paired`.
 5. Respond **once** with the plaintext secret:
 
@@ -98,13 +108,22 @@ METHOD \n PATH \n X-Timestamp \n X-Nonce \n sha256_hex(body)
 `X-Signature = HMAC_SHA256(device_secret, canonical_string)` (mbedTLS on-device).
 
 Server verification, in order:
-1. Device exists, `status != 'revoked'`.
+1. Device exists, `status != 'revoked'`, and its secret decrypts.
 2. `|now - X-Timestamp| <= 300 s` (replay window; the DS3231 keeps this achievable).
-3. Nonce unseen for this device within the window (Redis `SETNX`, 300 s TTL).
-4. Body hash matches (multipart: hash of the **raw** body bytes).
-5. Signature matches via `hmac.compare_digest` (constant-time).
+   Checked before anything expensive — a wrong clock is the most common firmware fault.
+3. Nonce unseen for this device within the window (Redis `SET … NX EX`, 300 s TTL,
+   keyed `nonce:{device_id}:{nonce}` so two cameras cannot collide).
+4. Body hash and signature, **in a single `hmac.compare_digest`**. The body hash is part
+   of the canonical string, so a tampered payload already yields a different signature;
+   comparing separately would add a non-constant-time check for no extra safety.
 
-Failures → `401` with a generic message. Never reveal which check failed.
+Failures → `401` with a generic message. Never reveal which check failed: naming the
+failed check tells a forger exactly what to fix. The specific reason is logged
+server-side, where an operator can see it and an attacker cannot.
+
+The TTL equals the skew window on purpose. A replay arriving after the nonce expires
+necessarily carries a timestamp more than 300 s old, so step 2 rejects it — the two
+checks cover each other's edges.
 
 ## Phase 4 — Ingest resolves the project
 
@@ -115,7 +134,7 @@ cannot write into a folder it isn't paired to. The filename is assigned server-s
 ## Unpairing
 
 `POST /devices/{id}/unpair` (requires `device:manage`) → `status='revoked'`,
-`revoked_at=now()`, secret hash wiped, audit-logged. Subsequent uploads get `401`; the
+`revoked_at=now()`, `secret_encrypted` wiped, audit-logged. Subsequent uploads get `401`; the
 firmware sees `401 DEVICE_REVOKED`, clears NVS, and re-enters provisioning. Historical
 images and predictions from that device are **retained** (progress history must not be
 rewritten by a hardware swap).

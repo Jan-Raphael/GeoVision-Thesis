@@ -151,7 +151,9 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
     from app.api.v1.routers import (
         auth,
         content,
+        devices,
         health,
+        ingest,
         members,
         projects,
         public,
@@ -169,9 +171,10 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(members.router, prefix=prefix)
     app.include_router(content.router, prefix=prefix)
     app.include_router(public.router, prefix=prefix)
+    app.include_router(devices.router, prefix=prefix)
+    app.include_router(ingest.router, prefix=prefix)
 
     # Mounted as the corresponding modules land:
-    #   Module 05  pairing, ingest, devices
     #   Module 09  predictions, progress, models
     #   Module 10  reports
     #   Module 14  ws

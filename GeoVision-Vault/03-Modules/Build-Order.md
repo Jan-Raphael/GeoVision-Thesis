@@ -2,7 +2,7 @@
 title: Build Order
 type: modules
 status: canonical
-updated: 2026-08-12
+updated: 2026-08-14
 ---
 
 # Build Order
@@ -76,8 +76,8 @@ flowchart LR
 | 02 | ✅ **done** | 2026-08-13 | 2026-08-13 | 18 tables, 14 repositories, reversible migration. 198 tests. Built on native PostgreSQL (no Docker yet). |
 | 03 | ✅ **done** | 2026-08-13 | 2026-08-13 | Auth, profiles, permission matrix, per-account throttling. 327 tests. Audit found 4 security gaps; all fixed. Avatar upload deferred to M04. |
 | 04 | ✅ **done** | 2026-08-13 | 2026-08-13 | Projects, folder payload, collaboration, assets, remarks, public surface. 413 tests. Storage port (ADR-018) removed the MinIO dependency. |
-| 05 | ▶ **next** | | | Needs **Redis** for the HMAC nonce cache (P0-3) |
-| 06 | planned | | | |
+| 05 | ✅ **done** | 2026-08-14 | 2026-08-14 | Pairing + QR, HMAC ingest, race-free naming, device health, simulator. 509 tests. Corrected the vault's hashed-secret contradiction (ADR-020) and a per-process lock key that would only have failed in production (ADR-022). |
+| 06 | ▶ **next** | | | Pure OpenCV + Albumentations 2.x; no server dependency |
 | 07 | planned | | | |
 | 08 | planned | | | |
 | 09 | planned | | | |

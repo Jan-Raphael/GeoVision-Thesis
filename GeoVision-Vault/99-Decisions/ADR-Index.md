@@ -2,7 +2,7 @@
 title: ADR Index
 type: decisions
 status: canonical
-updated: 2026-08-12
+updated: 2026-08-14
 ---
 
 # Architecture Decision Records
@@ -290,6 +290,70 @@ has to deliberately add a field to the public model". Cost: two models to mainta
 can drift in the *harmless* direction (public missing something it could show).
 **Rejected.** Filtering a shared model with an exclude-list - one forgotten entry is a
 privacy breach, and nothing fails loudly when it happens.
+
+## ADR-020 - Device secrets are encrypted at rest, not hashed
+**Status:** Accepted 2026-08-14 · corrects [[Device-Pairing-Protocol]] Phase 2
+**Context.** The pairing protocol note said two things that cannot both be true: store only
+the *hash* of `device_secret`, and verify each request with
+`HMAC_SHA256(device_secret, canonical_string)`. A password can be hashed because the server
+only ever compares it. A MAC key cannot - the server has to recompute the MAC, which means
+it needs the key back. Implemented as written, every signed request from every camera would
+have failed verification, and the failure would have looked like a firmware bug.
+**Decision.** `devices.secret_encrypted` holds the secret encrypted with Fernet
+(AES-128-CBC + HMAC-SHA256), keyed on `GV_DEVICE_SECRET_KEY`. Required in staging and
+production; a fixed, obviously-fake key in local development so cameras paired in one
+session still authenticate after a restart. Decryption failure returns `None` rather than
+raising, so a rotated key degrades to "this camera cannot authenticate" instead of a 500.
+Pairing *codes* remain hashed - those are only ever compared.
+**Consequences.** A stolen database dump is still useless on its own: the ciphertext needs
+the key, which lives in the environment, not the database. The cost is that the key is now
+a real operational secret - losing or rotating it un-pairs every camera, which must then be
+re-provisioned by hand on a roof. That is documented in `.env.example` next to the setting.
+Also: the m05 migration drops the old `secret_hash` column rather than migrating it, because
+no value stored there could ever have worked.
+**Rejected.** Hashing the secret and having the *device* prove knowledge via a
+challenge-response handshake - correct, but it adds a round trip per wake to a
+battery-powered camera and considerably more firmware. Storing the secret in plaintext -
+one dump and every camera is forgeable. Asymmetric signatures (device holds a private key,
+server a public one) - genuinely better, and the honest reason against it is cost: ECDSA on
+an ESP32 is far slower than HMAC, and the thesis scope does not include a PKI. Worth
+revisiting if the project ever leaves a single-operator deployment.
+
+## ADR-021 - Replay protection is a port with a memory and a Redis backend
+**Status:** Accepted 2026-08-14
+**Context.** Nonce checking needs an atomic "claim this key if unseen". Redis does it in one
+`SET … NX EX`. But binding Module 05 to Redis would mean no ingest test could run without a
+container, repeating the Module 04 problem that ADR-018 solved for object storage.
+**Decision.** A `NonceCache` protocol with two implementations: `InMemoryNonceCache` for
+tests and single-process development, `RedisNonceCache` for anything real. Selected by
+`GV_NONCE_CACHE_BACKEND`, and `memory` is **refused** in staging and production by the same
+settings validator that refuses local storage.
+**Consequences.** The full ingest suite runs with no infrastructure, and the Redis path is
+exercised by the end-to-end simulator run. The refusal matters more than it looks: an
+in-memory cache stops protecting the moment a second worker exists, because each process
+holds its own set and a replayed request only has to land on the other one. That failure is
+invisible - uploads succeed - so it has to be a startup error rather than a warning.
+**Rejected.** Redis-only (blocks all testing on a container); a database table for nonces
+(a write per request on the hottest path, plus a sweep job, to store data that is worthless
+after five minutes).
+
+## ADR-022 - The daily sequence lock key is a stable digest, never Python's `hash()`
+**Status:** Accepted 2026-08-14
+**Context.** Filenames carry a per-project per-day sequence number, allocated under a
+PostgreSQL advisory lock so two cameras waking at 07:00:00 cannot both be handed `001`. The
+first implementation derived the lock key with `hash((str(project_id), day))`.
+**Decision.** Derive it with BLAKE2b over `{project_id}:{day}`, masked to 63 bits.
+**Consequences.** Python randomises string hashing per interpreter process
+(`PYTHONHASHSEED`), so two uvicorn workers - or two containers - would have computed
+*different* keys for the same project and day, taken different locks, and serialised
+nothing. The bug is invisible in every single-process test, and in production it surfaces as
+two images sharing a filename, one silently overwriting the other in object storage, under
+exactly the name an owner is expected to reconcile against a site diary. The key is now
+pinned to a literal in `test_sequence_allocation.py` so a "cleanup" cannot quietly reopen
+it.
+**Rejected.** A dedicated `sequences` table (an extra row and write per upload for something
+the lock already gives); `SELECT … FOR UPDATE` on the project row (serialises *all* writes
+to a project, not just same-day sequence allocation).
 
 ---
 

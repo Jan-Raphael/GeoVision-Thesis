@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     environment: Environment = Environment.LOCAL
     debug: bool = True
     api_v1_prefix: str = "/api/v1"
+    # Where a *device* should send its uploads. Encoded into the pairing QR,
+    # so it must be reachable from the construction site - not "localhost".
+    public_base_url: str = "http://localhost:8000"
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     log_format: Literal["json", "console"] = "console"
@@ -138,6 +141,19 @@ class Settings(BaseSettings):
     # -- Device ingest ------------------------------------------------------
     device_clock_skew_seconds: int = Field(default=300, ge=30, le=3600)
     pairing_token_ttl_minutes: int = Field(default=15, ge=1, le=120)
+    # Replay protection. "memory" is process-local: with several API workers
+    # each keeps its own set, so a replayed upload that lands on a different
+    # worker is accepted - which is not replay protection at all. Refused
+    # outside local development, same as filesystem storage.
+    nonce_cache_backend: Literal["memory", "redis"] = "redis"
+    # Encrypts device HMAC secrets at rest. A secret must be *recoverable*
+    # to verify a signature, so it is encrypted rather than hashed (ADR-020);
+    # keeping the key out of the database is what makes a dump useless.
+    device_secret_key: str = Field(default="", repr=False)
+    min_image_width: int = Field(default=320, ge=1)
+    min_image_height: int = Field(default=240, ge=1)
+    #: A capture stamped further ahead than this means a corrupt device clock.
+    max_capture_future_hours: int = Field(default=24, ge=1, le=168)
 
     # -- AI -----------------------------------------------------------------
     model_dir: Path = REPO_ROOT / "models"
@@ -198,6 +214,7 @@ class Settings(BaseSettings):
             "GV_JWT_SECRET_KEY": self.jwt_secret_key,
             "GV_POSTGRES_PASSWORD": self.postgres_password,
             "GV_S3_SECRET_KEY": self.s3_secret_key,
+            "GV_DEVICE_SECRET_KEY": self.device_secret_key,
         }
         missing = [name for name, value in required.items() if not value]
 
@@ -212,6 +229,14 @@ class Settings(BaseSettings):
             if self.debug:
                 msg = f"GV_DEBUG must be false in '{self.environment}'"
                 raise ValueError(msg)
+            if self.nonce_cache_backend == "memory":
+                # A per-process nonce set is replay protection in shape only:
+                # the replay simply has to land on a different worker.
+                msg = (
+                    f"GV_NONCE_CACHE_BACKEND='memory' is not permitted in "
+                    f"'{self.environment}'; use 'redis'."
+                )
+                raise ValueError(msg)
             if self.storage_backend == "local":
                 # Filesystem storage has no replication, no lifecycle rules, and
                 # no real signed URLs. Fine for development, never for a
@@ -221,10 +246,19 @@ class Settings(BaseSettings):
                     f"'{self.environment}'; use 's3'."
                 )
                 raise ValueError(msg)
-        elif not self.jwt_secret_key:
-            # Ephemeral, per-process key: tokens do not survive a restart, which
-            # is exactly what you want locally and is never valid in production.
-            object.__setattr__(self, "jwt_secret_key", secrets.token_urlsafe(64))
+        else:
+            if not self.device_secret_key:
+                # Deterministic, so devices paired in one dev session still
+                # authenticate after a restart. Obviously not a secret - and
+                # refused outright in any deployed environment by the branch above.
+                object.__setattr__(
+                    self, "device_secret_key", "geovision-local-development-device-key"
+                )
+            if not self.jwt_secret_key:
+                # Ephemeral, per-process key: tokens do not survive a restart,
+                # which is exactly what you want locally and is never valid in
+                # production.
+                object.__setattr__(self, "jwt_secret_key", secrets.token_urlsafe(64))
 
         return self
 

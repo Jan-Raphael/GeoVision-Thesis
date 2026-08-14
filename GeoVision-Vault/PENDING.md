@@ -2,7 +2,7 @@
 title: PENDING — master priority board
 type: index
 status: living
-updated: 2026-08-13
+updated: 2026-08-14
 ---
 
 # PENDING — what needs doing, in priority order
@@ -40,9 +40,17 @@ updated: 2026-08-13
 | ~~P0-2~~ | ~~Update Windows~~ | — | ✅ **not needed.** Build 19045 already meets Docker's minimum. |
 | ~~P0-3~~ | ~~Install Docker Desktop~~ | — | ✅ **done 2026-08-14.** Docker 29.6.2 + Compose v5.3.1, WSL data root on `F:\Docker\wsl`. Redis and MinIO containerised; PostgreSQL stays native behind a compose `db` profile. `/health/ready` returns 200 ready. |
 
-**Not blocked by any of the above:** [[Module-06-AI-Preprocessing]] needs no services and no
-labelled data. If P0-1 will take a while, build Module 06 — it is correctly sequenced anyway
-(settle the pipeline *before* annotating, or you re-annotate).
+**Nothing is blocking code right now.** Modules 01–05 are done and the whole server stack
+runs. The critical path has moved off the keyboard and onto the calendar: everything in P1
+below is now what actually decides whether this finishes on time.
+
+**Build next:** [[Module-06-AI-Preprocessing]] needs no services and no labelled data, and
+it is correctly sequenced before annotation anyway — settle the preprocessing pipeline
+*before* annotating, or you annotate twice.
+
+> **Before deploying anything beyond your laptop**, set `GV_DEVICE_SECRET_KEY` and keep a
+> backup of it. It encrypts every paired camera's secret (ADR-020); lose it and every camera
+> must be re-provisioned by hand, on site.
 
 ---
 
@@ -101,8 +109,8 @@ Authoritative board: [[Build-Order]].
 | 02 | Database Schema | ✅ done | — |
 | 03 | Auth & Users | ✅ done | — |
 | 04 | Projects & Folders | ✅ done | — |
-| 05 | Device Pairing & Ingestion | **▶ next — unblocked** | — |
-| 06 | AI Preprocessing | **available now** | — nothing |
+| 05 | Device Pairing & Ingestion | ✅ done | — |
+| 06 | AI Preprocessing | **▶ next — available now** | — nothing |
 | 07 | Classifier Training | pending | **P1-3, P1-4** (dataset) |
 | 08 | YOLO Detection | pending | P1-3, P1-4 |
 | 09 | Inference & Progress | pending | 05, 07, 08 — *the progress engine can be built early against a `StubClassifier`* |
@@ -122,7 +130,6 @@ Unresolved questions, from [[Open-Questions]]. Each one blocks or reshapes work:
 
 | | Question | Priority |
 |---|---|---|
-| Q9 | Install Docker Desktop | **P0** |
 | Q1 | Are the stage percentages realistic? | **P1** |
 | Q3 | Which site, with whose permission? | **P1** |
 | Q5 | How many labelled images can you realistically get? | **P1** |

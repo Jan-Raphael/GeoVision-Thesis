@@ -302,16 +302,14 @@ class TestDeviceRepository:
                 face=CameraFace.FRONT_DIAGONAL,
                 weight=1.5,
             ),
-            secret_hash="hashed-secret",
+            secret_encrypted="encrypted-secret",
         )
         assert await devices.face_taken(project.id, CameraFace.FRONT_DIAGONAL) is True
 
         await devices.revoke(device.id, datetime.now(UTC))
         assert await devices.face_taken(project.id, CameraFace.FRONT_DIAGONAL) is False
 
-    async def test_secret_hash_is_write_only_through_the_entity(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_secret_is_write_only_through_the_entity(self, session: AsyncSession) -> None:
         from app.domain.entities import Device
 
         users = SqlAlchemyUserRepository(session)
@@ -328,11 +326,10 @@ class TestDeviceRepository:
                 face=CameraFace.FRONT_DIAGONAL,
                 weight=1.5,
             ),
-            secret_hash="hashed-secret",
+            secret_encrypted="encrypted-secret",
         )
 
-        assert "hashed-secret" not in repr(device)
-        assert await devices.get_secret_hash(device.id) == "hashed-secret"
+        assert "encrypted-secret" not in repr(device)
 
     async def test_capture_schedule_round_trips_through_jsonb(self, session: AsyncSession) -> None:
         from app.domain.entities import CaptureSchedule, Device
@@ -353,7 +350,7 @@ class TestDeviceRepository:
                 weight=1.0,
                 capture_schedule=schedule,
             ),
-            secret_hash="h",
+            secret_encrypted="encrypted",
         )
 
         fetched = await devices.get(device.id)

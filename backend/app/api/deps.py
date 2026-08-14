@@ -26,14 +26,17 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.ports.storage import ObjectStorage
+from app.application.ports.task_queue import LoggingTaskQueue, TaskQueue
+from app.core import device_auth
 from app.core.clock import SYSTEM_CLOCK, Clock
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ForbiddenError, NotFoundError, UnauthenticatedError
 from app.core.security import TokenError, TokenType, verify_token
-from app.domain.entities import User
+from app.domain.entities import Device, User
 from app.domain.enums import Permission
 from app.domain.services.authorization import AccessContext, can_view_project
-from app.infrastructure.audit import AuditLogger
+from app.infrastructure.audit import AuditAction, AuditLogger
+from app.infrastructure.cache import get_nonce_cache
 from app.infrastructure.db.session import get_session
 from app.infrastructure.repositories import (
     SqlAlchemyAIModelRepository,
@@ -299,6 +302,84 @@ async def get_optional_user(
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 OptionalUser = Annotated[User | None, Depends(get_optional_user)]
+
+
+def get_task_queue() -> TaskQueue:
+    """Provide the background task queue.
+
+    A logging stub until Module 09 supplies a Celery-backed implementation.
+    Ingest still records the handoff, and `images.status='pending'` is the
+    durable backlog a worker will drain when it arrives.
+    """
+    return LoggingTaskQueue()
+
+
+TaskQueueDep = Annotated[TaskQueue, Depends(get_task_queue)]
+
+
+async def get_current_device(
+    request: Request,
+    settings: SettingsDep,
+    devices: DeviceRepoDep,
+    audit: AuditDep,
+    clock: ClockDep,
+) -> Device:
+    """Authenticate an ESP32-CAM by its HMAC signature.
+
+    Implements `Device-Pairing-Protocol.md` Phase 3. The raw body is read here
+    (Starlette caches it, so the handler can still parse the multipart form) and
+    hashed into the canonical string, which is what stops an attacker swapping
+    the image while keeping a valid-looking signature.
+
+    **Every failure returns the same 401.** The specific reason is logged and
+    audited server-side; disclosing it would tell an attacker which half of
+    their forgery to fix.
+
+    Raises:
+        UnauthenticatedError: On any verification failure.
+    """
+    body = await request.body()
+    client_ip = get_client_ip(request)
+
+    async def _deny(reason: str, device_id: object = None) -> UnauthenticatedError:
+        await audit.record(
+            AuditAction.DEVICE_AUTH_FAILED,
+            entity_type="device",
+            entity_id=device_id if isinstance(device_id, UUID) else UUID(int=0),
+            ip_address=client_ip,
+            metadata={"reason": reason, "path": request.url.path},
+        )
+        return UnauthenticatedError(device_auth.GENERIC_AUTH_FAILURE)
+
+    try:
+        signed = device_auth.parse_signed_request(request.headers, body)
+    except device_auth.DeviceAuthError as exc:
+        raise await _deny(exc.reason) from exc
+
+    device = await devices.get(signed.device_id)
+    usable = device is not None and device.is_usable
+    secret = (
+        await devices.get_secret(signed.device_id, settings.device_secret_key) if usable else None
+    )
+
+    try:
+        await device_auth.verify_signed_request(
+            signed,
+            secret=secret,
+            method=request.method,
+            path=request.url.path,
+            nonces=get_nonce_cache(settings),
+            now=clock.now(),
+            skew_seconds=settings.device_clock_skew_seconds,
+        )
+    except device_auth.DeviceAuthError as exc:
+        raise await _deny(exc.reason, signed.device_id) from exc
+
+    assert device is not None  # noqa: S101 - narrowed by `usable` above
+    return device
+
+
+CurrentDevice = Annotated[Device, Depends(get_current_device)]
 
 
 # ---------------------------------------------------------------------------

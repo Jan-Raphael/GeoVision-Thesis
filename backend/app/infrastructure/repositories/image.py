@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -26,6 +27,25 @@ __all__ = [
     "SqlAlchemyPredictionRepository",
     "SqlAlchemySnapshotRepository",
 ]
+
+
+def advisory_lock_key(project_id: UUID, day: date) -> int:
+    """Derive a stable advisory-lock key for one project-day.
+
+    Deliberately **not** Python's :func:`hash`. String hashing is randomised per
+    interpreter process (``PYTHONHASHSEED``), so two uvicorn workers — or two
+    containers behind the load balancer — would compute different keys for the
+    same project and day, take different locks, and serialise nothing. The
+    sequence collision this lock exists to prevent would then reappear in
+    exactly the deployment that needs it most, while every single-process test
+    kept passing.
+
+    BLAKE2b is stable across processes, machines, and Python versions. The
+    result is masked to 63 bits because ``pg_advisory_xact_lock`` takes a signed
+    ``bigint``.
+    """
+    digest = hashlib.blake2b(f"{project_id}:{day.isoformat()}".encode(), digest_size=8).digest()
+    return int.from_bytes(digest, "big") & 0x7FFF_FFFF_FFFF_FFFF
 
 
 def _encode_cursor(moment: datetime, image_id: UUID) -> str:
@@ -145,8 +165,11 @@ class SqlAlchemyImageRepository:
         keyed on ``(project, day)`` serialises concurrent allocations, so two
         cameras uploading simultaneously cannot both receive ``001``. The lock
         is released automatically when the transaction ends.
+
+        The key comes from :func:`advisory_lock_key`, which is stable across
+        processes — see its docstring for why that matters.
         """
-        lock_key = hash((str(project_id), day.isoformat())) % (2**31)
+        lock_key = advisory_lock_key(project_id, day)
         await self._session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
 
         start = datetime.combine(day, time.min, tzinfo=UTC)

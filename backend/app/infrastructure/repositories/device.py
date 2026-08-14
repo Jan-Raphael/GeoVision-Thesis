@@ -73,10 +73,20 @@ class SqlAlchemyDeviceRepository:
         )
         return bool((await self._session.execute(stmt)).scalar_one())
 
-    async def get_secret_hash(self, device_id: UUID) -> str | None:
-        """Return the HMAC secret hash used to verify request signatures."""
-        stmt = select(models.DeviceModel.secret_hash).where(models.DeviceModel.id == device_id)
-        return (await self._session.execute(stmt)).scalar_one_or_none()
+    async def get_secret(self, device_id: UUID, encryption_key: str) -> str | None:
+        """Return the device's decrypted HMAC secret.
+
+        ``None`` when the device is unknown, has been unpaired (its secret is
+        wiped), or the ciphertext cannot be decrypted with the current key -
+        all of which mean the same thing to the caller: cannot authenticate.
+        """
+        from app.core.device_auth import decrypt_device_secret
+
+        stmt = select(models.DeviceModel.secret_encrypted).where(models.DeviceModel.id == device_id)
+        ciphertext = (await self._session.execute(stmt)).scalar_one_or_none()
+        if not ciphertext:
+            return None
+        return decrypt_device_secret(ciphertext, encryption_key)
 
     async def list_stale(self, since: datetime) -> tuple[Device, ...]:
         """Paired devices not heard from since *since* — the offline sweep."""
@@ -90,12 +100,12 @@ class SqlAlchemyDeviceRepository:
         rows = (await self._session.execute(stmt)).scalars().all()
         return tuple(to_device(row) for row in rows)
 
-    async def add(self, device: Device, secret_hash: str) -> Device:
+    async def add(self, device: Device, secret_encrypted: str) -> Device:
         """Create a device at pairing time.
 
-        The secret hash is passed separately and stored write-only: the
-        plaintext is returned to the firmware exactly once, at claim time, and
-        is never retrievable afterwards.
+        The encrypted secret is passed separately so it never travels on the
+        entity: `Device` carries no credential material, and an entity that
+        cannot hold a secret cannot serialise one into a response.
         """
         row = models.DeviceModel(
             id=device.id,
@@ -103,7 +113,7 @@ class SqlAlchemyDeviceRepository:
             device_name=device.device_name,
             face=device.face,
             weight=to_decimal(device.weight),
-            secret_hash=secret_hash,
+            secret_encrypted=secret_encrypted,
             status=device.status,
             firmware_version=device.firmware_version,
             hardware_id=device.hardware_id,
@@ -171,7 +181,7 @@ class SqlAlchemyDeviceRepository:
         stmt = (
             update(models.DeviceModel)
             .where(models.DeviceModel.id == device_id)
-            .values(status=DeviceStatus.REVOKED, revoked_at=revoked_at, secret_hash=None)
+            .values(status=DeviceStatus.REVOKED, revoked_at=revoked_at, secret_encrypted=None)
         )
         result = await self._session.execute(stmt)
         return bool(affected_rows(result))

@@ -25,6 +25,8 @@ def _settings(**overrides: object) -> Settings:
         "jwt_secret_key": "x" * 64,
         "postgres_password": "y" * 32,
         "s3_secret_key": "z" * 32,
+        # Encrypts device secrets at rest (Module 05, ADR-020).
+        "device_secret_key": "w" * 32,
         # Deployed environments must name a real storage backend.
         "storage_backend": "s3",
     }

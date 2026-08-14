@@ -396,8 +396,10 @@ class DeviceModel(Base, TimestampMixin):
     weight: Mapped[Decimal] = mapped_column(
         Numeric(3, 2), nullable=False, server_default=text("1.0")
     )
-    # Only the hash: the plaintext secret is shown once, at pairing.
-    secret_hash: Mapped[str | None] = mapped_column(Text)
+    # Encrypted, not hashed: HMAC verification needs the key itself, so the
+    # server must be able to recover it (ADR-020). The encryption key lives
+    # in the environment, so a database dump alone yields nothing usable.
+    secret_encrypted: Mapped[str | None] = mapped_column(Text)
     status: Mapped[enums.DeviceStatus] = mapped_column(
         pg_enum(enums.DeviceStatus, "device_status"),
         nullable=False,

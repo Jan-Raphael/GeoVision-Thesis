@@ -3,7 +3,7 @@ title: API Contract
 type: api
 status: canonical
 version: v1
-updated: 2026-08-12
+updated: 2026-08-14
 ---
 
 # REST API Contract — `/api/v1`
@@ -88,21 +88,38 @@ Original spec endpoints (`/upload`, `/predict`, `/history`, `/projects`, `/repor
 |---|---|---|
 | POST | `/projects/{id}/pairing-tokens` | `{face}` → `{display_code, qr_png_base64, provisioning_payload, expires_at}`. 15-min TTL, single use. |
 | GET | `/projects/{id}/devices` | device panel: name, face, status, last_seen, battery, rssi, image count, weight |
-| PATCH | `/devices/{id}` | `{weight?, capture_schedule?, homography?, roi_polygon?}` |
-| POST | `/devices/{id}/unpair` | revokes secret; device must re-pair |
-| GET | `/devices/{id}/events` | health timeline |
+| PATCH | `/projects/{id}/devices/{device_id}` | `{weight?, capture_times?, timezone?, jitter_seconds?, enabled?, homography?, roi_polygon?}` |
+| POST | `/projects/{id}/devices/{device_id}/unpair` | revokes the secret; device must re-pair. **Its images are kept.** |
+| GET | `/projects/{id}/devices/{device_id}/events` | health timeline — *not yet implemented; Module 12 needs it* |
+
+> Device management routes are nested under the project rather than sitting at `/devices/{id}`.
+> The permission guard resolves authority from `(caller, project)`, so a project-less path
+> would have to look the project up first just to decide whether the caller may see that the
+> device exists — and a 403-vs-404 slip there leaks the existence of other people's hardware.
 
 ## Device-facing ingest (HMAC auth, **not** JWT) — `/ingest/*`
 
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/pair/claim` | `{display_code, hardware_id, firmware_version}` → `{device_id, device_secret, device_name, project_code, capture_schedule}`. Secret returned **once**. |
-| POST | `/ingest/images` | multipart: `file` + `meta` JSON `{captured_at, latitude, longitude, gps_accuracy_m, satellites, seq_hint, sha256, battery_mv, rssi_dbm}`. Idempotent on `(device_id, sha256, captured_at)`. → `201 {image_id, filename, accepted: true}` |
+| POST | `/ingest/images` | multipart: `file` + `meta` JSON `{captured_at, latitude, longitude, gps_accuracy_m, altitude_m, satellites, seq_hint, sha256, battery_mv, rssi_dbm}`. Idempotent on **`(project_id, sha256)`**. → `201 {image_id, filename, accepted, duplicate, server_time}` |
 | POST | `/ingest/events` | boot / heartbeat / error / sleep |
 | GET | `/ingest/config` | current schedule + server time (for RTC drift correction) + upload limits |
 
 Headers: `X-Device-Id`, `X-Timestamp`, `X-Nonce`, `X-Signature` — see
 [[Device-Pairing-Protocol]].
+
+> **Idempotency narrowed to `(project_id, sha256)`** (2026-08-14). The original key included
+> `device_id` and `captured_at`. Both weaken it: a camera retrying after a lost ACK may
+> re-stamp `captured_at`, and the same bytes arriving from a re-paired device — new
+> `device_id`, same hardware — is still the same photograph. Content-addressing by project is
+> the honest identity of a capture. Sensor noise and JPEG encoding make two genuinely
+> different frames byte-identical only if nothing moved *and* nothing was re-encoded, which
+> does not happen on a real sensor.
+>
+> A duplicate returns `201` with `duplicate: true` rather than `200`: the capture is stored
+> and the outcome from the camera's point of view is identical, and firmware that branches on
+> the status code is firmware that can get the two paths wrong.
 
 ## Images & Assets
 

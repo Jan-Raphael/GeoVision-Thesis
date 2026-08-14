@@ -43,9 +43,11 @@ if TYPE_CHECKING:
         Remark,
         User,
     )
+    from app.domain.enums import DeviceStatus
 
 __all__ = [
     "present_asset",
+    "present_device",
     "present_folder",
     "present_member",
     "present_public_project",
@@ -131,13 +133,15 @@ def present_asset(asset: ReferenceAsset, download_url: str | None = None) -> Ass
     )
 
 
-def _device(device: Device) -> DeviceSummaryResponse:
-    """A paired camera."""
+def present_device(
+    device: Device, *, liveness: DeviceStatus | None = None
+) -> DeviceSummaryResponse:
+    """A paired camera, optionally with freshly derived liveness."""
     return DeviceSummaryResponse(
         id=device.id,
         device_name=device.device_name,
         face=device.face,
-        status=device.status,
+        status=liveness or device.status,
         weight=device.weight,
         last_seen_at=device.last_seen_at,
         last_battery_mv=device.last_battery_mv,
@@ -235,7 +239,7 @@ def present_folder(
         members=[
             present_member(member, users.get(str(member.user_id))) for member in folder.members
         ],
-        devices=[_device(device) for device in folder.devices],
+        devices=[present_device(device) for device in folder.devices],
         recent_images=[_image(image) for image in folder.recent_images],
         remarks=[present_remark(remark) for remark in folder.remarks],
         assets=[present_asset(asset, urls.get(str(asset.id))) for asset in folder.assets],
