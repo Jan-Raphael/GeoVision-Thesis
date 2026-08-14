@@ -20,6 +20,10 @@ from typing import Any
 
 from app.core.config import Settings
 
+#: Per-probe budget. Generous enough to absorb a cold client construction on
+#: first request, tight enough that a hung dependency is reported promptly.
+PROBE_TIMEOUT = 8.0
+
 
 class ProbeStatus(StrEnum):
     """Outcome of a single dependency probe."""
@@ -74,13 +78,18 @@ class ReadinessReport:
         }
 
 
-async def _timed(name: str, coro: Any) -> ProbeResult:
+async def _timed(
+    name: str,
+    coro: Any,
+    *,
+    timeout: float = PROBE_TIMEOUT,  # noqa: ASYNC109 - a probe budget, not a cancellation contract
+) -> ProbeResult:
     """Await *coro*, converting any failure into a ``FAILED`` result."""
     started = time.perf_counter()
     try:
-        await asyncio.wait_for(coro, timeout=3.0)
+        await asyncio.wait_for(coro, timeout=timeout)
     except TimeoutError:
-        return ProbeResult(name, ProbeStatus.FAILED, detail="timed out after 3s")
+        return ProbeResult(name, ProbeStatus.FAILED, detail=f"timed out after {timeout:g}s")
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}"
         return ProbeResult(name, ProbeStatus.FAILED, detail=detail[:200])
@@ -118,27 +127,26 @@ async def _probe_redis(settings: Settings) -> None:
 
 
 async def _probe_object_storage(settings: Settings) -> None:
-    """Confirm the configured bucket exists and is reachable.
+    """Confirm the configured storage backend is reachable.
 
-    ``boto3`` is synchronous, so it runs in a worker thread to avoid blocking
-    the event loop.
+    Goes through the **same backend the application uses**, rather than
+    building a throwaway boto3 client. Two reasons:
+
+    1. It probes what actually serves requests. With ``GV_STORAGE_BACKEND=local``
+       a boto3 probe would report on an S3 endpoint nothing else talks to -
+       green light, wrong dependency.
+    2. The shared client is constructed once. Building a boto3 client is
+       surprisingly expensive (botocore loads its service model from disk) and
+       on a cold process reliably exceeded a 3-second probe budget - which is
+       exactly how this probe first failed against a perfectly healthy MinIO.
+
+    ``exists()`` on a key that will not be there is enough: a 404 still proves
+    the endpoint answered, and it avoids writing to storage on every probe.
     """
-    import boto3
-    from botocore.config import Config
+    from app.infrastructure.storage import get_storage
 
-    def _head_bucket() -> None:
-        client = boto3.client(
-            "s3",
-            endpoint_url=settings.s3_endpoint_url,
-            aws_access_key_id=settings.s3_access_key,
-            aws_secret_access_key=settings.s3_secret_key,
-            region_name=settings.s3_region,
-            use_ssl=settings.s3_use_ssl,
-            config=Config(connect_timeout=3, read_timeout=3, retries={"max_attempts": 1}),
-        )
-        client.head_bucket(Bucket=settings.s3_bucket)
-
-    await asyncio.to_thread(_head_bucket)
+    storage = get_storage(settings)
+    await storage.exists("_healthcheck/probe")
 
 
 async def check_readiness(settings: Settings) -> ReadinessReport:

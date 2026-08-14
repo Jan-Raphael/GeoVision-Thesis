@@ -55,6 +55,87 @@ Result: `GET /health/ready` reports `postgres: ok`, with `redis` and `object_sto
 
 ---
 
+## This machine's actual arrangement (2026-08-14)
+
+Docker Desktop is installed and the stack runs, but not in the shape the rest of
+this note assumes. Recorded here so a future session does not "fix" it back.
+
+| Component | Where it runs | Why |
+|---|---|---|
+| PostgreSQL 16.14 | **native Windows service**, port 5433 | Installed before Docker existed (Modules 02-04). Holds the working database. |
+| Redis 7 | Docker | Needed from Module 05 for the HMAC replay-nonce cache. |
+| MinIO | Docker | Exercises the S3 storage backend (ADR-018). |
+
+### Postgres is behind a compose profile
+
+`docker compose up` starts **redis + minio only**. The containerised PostgreSQL
+sits behind a `db` profile:
+
+```powershell
+docker compose --env-file .env -f docker/docker-compose.dev.yml up            # redis + minio
+docker compose --env-file .env -f docker/docker-compose.dev.yml --profile db up   # + postgres
+```
+
+**Why.** With both running, they each bind host 5433. Docker reports its
+container healthy and maps the port, while the native service actually answers
+the connection - so `SELECT version()` returns *PostgreSQL 16.14 Visual C++*
+(native) even though a perfectly healthy Alpine container is sitting there
+believing it serves that port. Nothing errors. You simply cannot tell which
+database a query reached, and a migration could run against one while a test
+reads the other. That ambiguity is far worse than the inconvenience of two
+setups, so one of them had to be switched off decisively.
+
+To use the containerised database instead, stop the Windows service first
+(needs an admin shell) and then re-run migrations and the seed:
+
+```powershell
+Stop-Service postgresql-x64-16 ; Set-Service postgresql-x64-16 -StartupType Manual
+docker compose --env-file .env -f docker/docker-compose.dev.yml --profile db up -d
+uv run alembic upgrade head ; uv run python -m scripts.seed_db
+```
+
+Module 16 containerises everything, and the `db` profile is what it will use.
+
+### Docker Desktop lives on F:, mostly
+
+Installed with:
+
+```powershell
+& "F:\Docker\_installer\DockerDesktopInstaller.exe" install `
+  --quiet --accept-license --backend=wsl-2 `
+  --installation-dir="F:\Docker\DockerDesktop" `
+  --wsl-default-data-root="F:\Docker\wsl" `
+  --windows-containers-default-data-root="F:\Docker\windows-containers"
+```
+
+| What | Where | Size |
+|---|---|---|
+| Images, containers, volumes (**the part that grows**) | `F:\Docker\wsl\DockerDesktopWSL\` | grows to tens of GB |
+| Program files | `%LOCALAPPDATA%\Programs\DockerDesktop` on **C:** | ~3.4 GB |
+| Settings, logs, cache | `%APPDATA%\Docker`, `%LOCALAPPDATA%\Docker` on **C:** | a few hundred MB |
+
+> ⚠ **`--installation-dir` is silently ignored** by Docker Desktop 4.86. It
+> always installs per-user under `%LOCALAPPDATA%\Programs\DockerDesktop`. The
+> flag causes no error and creates the directory you asked for - empty. Only
+> `--wsl-default-data-root` actually takes effect, and that is the one that
+> matters, since it holds the multi-GB disk image rather than a fixed ~3.4 GB.
+
+### Reinstalling? Clear the old WSL distro first
+
+A previous Docker Desktop had left its distro wedged in `Uninstalling` state,
+which blocks a fresh install:
+
+```powershell
+wsl --list --verbose        # docker-desktop | Uninstalling
+wsl --shutdown
+wsl --unregister docker-desktop
+```
+
+`wsl --unregister` prints an alarming `ERROR_UNHANDLED_EXCEPTION` here and
+succeeds anyway - check `wsl --list --verbose` rather than the exit code.
+
+---
+
 ## Phase 0 — Pre-flight (5 min)
 
 Two things must be true before you download anything. Checking now avoids a failed install.

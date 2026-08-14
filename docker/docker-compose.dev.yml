@@ -14,9 +14,26 @@
 name: geovision-dev
 
 services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL is behind a profile, so `docker compose up` does NOT start it.
+  #
+  # This machine runs PostgreSQL natively (installed before Docker existed, see
+  # Local-Environment-Setup.md). Running both is worse than running either: they
+  # both bind host 5433, Docker's mapping wins silently on some interfaces and
+  # loses on others, and you cannot tell which database a query reached. That
+  # ambiguity is far more dangerous than the inconvenience of two setups.
+  #
+  #   docker compose up                     -> redis + minio only
+  #   docker compose --profile db up        -> adds containerised PostgreSQL
+  #
+  # Use the profile on a machine with no native install, and in Module 16 where
+  # the whole stack is containerised. If you enable it here, stop the Windows
+  # service first: `Stop-Service postgresql-x64-16` (needs an admin shell).
+  # ---------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
     container_name: geovision-postgres
+    profiles: ["db"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${GV_POSTGRES_USER:-geovision}

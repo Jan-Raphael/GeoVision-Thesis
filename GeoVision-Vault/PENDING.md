@@ -37,8 +37,8 @@ updated: 2026-08-13
 | # | Task | Blocks | Notes |
 |---|---|---|---|
 | ~~P0-1~~ | ~~Get a PostgreSQL running~~ | — | ✅ **done 2026-08-13.** PostgreSQL 16 installed natively at `F:\PostgreSQL\16`, port 5433, with `geovision` + `geovision_test` databases and all four extensions. Unblocked Modules 02–03. |
-| P0-2 | Update Windows to build 19045+ | Docker Desktop | Prerequisite for P0-3. Runs unattended — start it and walk away. |
-| P0-3 | Install Docker Desktop (WSL2) | Modules 05, 09, 14, 16 — **Redis + Celery** | **Now blocking.** Module 05 needs Redis for the HMAC replay-nonce cache. MinIO is no longer required to proceed (ADR-018 gave storage a local backend), but Redis has no equivalent. Requires Windows Update first (P0-2). Guide: [[Local-Environment-Setup]] |
+| ~~P0-2~~ | ~~Update Windows~~ | — | ✅ **not needed.** Build 19045 already meets Docker's minimum. |
+| ~~P0-3~~ | ~~Install Docker Desktop~~ | — | ✅ **done 2026-08-14.** Docker 29.6.2 + Compose v5.3.1, WSL data root on `F:\Docker\wsl`. Redis and MinIO containerised; PostgreSQL stays native behind a compose `db` profile. `/health/ready` returns 200 ready. |
 
 **Not blocked by any of the above:** [[Module-06-AI-Preprocessing]] needs no services and no
 labelled data. If P0-1 will take a while, build Module 06 — it is correctly sequenced anyway
@@ -101,7 +101,7 @@ Authoritative board: [[Build-Order]].
 | 02 | Database Schema | ✅ done | — |
 | 03 | Auth & Users | ✅ done | — |
 | 04 | Projects & Folders | ✅ done | — |
-| 05 | Device Pairing & Ingestion | **▶ next** | **Redis** for the HMAC nonce cache (**P0-3**). Storage is already solved (ADR-018). |
+| 05 | Device Pairing & Ingestion | **▶ next — unblocked** | — |
 | 06 | AI Preprocessing | **available now** | — nothing |
 | 07 | Classifier Training | pending | **P1-3, P1-4** (dataset) |
 | 08 | YOLO Detection | pending | P1-3, P1-4 |
