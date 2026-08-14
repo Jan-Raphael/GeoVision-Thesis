@@ -20,6 +20,7 @@ from app.api.deps import (
     ClockDep,
     CurrentDevice,
     DeviceRepoDep,
+    EventPublisherDep,
     ImageRepoDep,
     ProjectRepoDep,
     SettingsDep,
@@ -85,6 +86,7 @@ async def ingest_image(
     projects: ProjectRepoDep,
     storage: StorageDep,
     tasks: TaskQueueDep,
+    events: EventPublisherDep,
     settings: SettingsDep,
     clock: ClockDep,
 ) -> IngestResponse:
@@ -120,6 +122,7 @@ async def ingest_image(
         projects,
         storage,
         tasks,
+        events=events,
         max_bytes=settings.max_image_upload_bytes,
         min_width=settings.min_image_width,
         min_height=settings.min_image_height,

@@ -43,9 +43,10 @@ updated: 2026-08-14
 **Nothing is blocking code right now.** Modules 01–06 and **09** are done, and the whole
 stack has been exercised end to end against live services.
 
-**Build next: [[Module-14-Realtime]], then [[Module-12-Owner-Dashboard]].** Modules 01-06 and
-09-11 are done. Module 12 needs 11 (done), 10 (done), and 14 — and **Q12 must be fixed first**,
-because its dashboard creates a project and immediately navigates to it. Module 09 was built ahead of 07/08 against a deterministic `StubClassifier`, which
+**Build next: [[Module-12-Owner-Dashboard]]** — but **fix Q12 first**, because its dashboard
+creates a project and immediately navigates to it, which is exactly the commit-after-response
+race. Modules 01-06 and 09-11 and 14 are done; 12's dependencies are all satisfied.
+After 12: 15 (testing/evaluation), 16 (deployment). 13 waits on hardware; 07/08 on the dataset. Module 09 was built ahead of 07/08 against a deterministic `StubClassifier`, which
 means **the dataset no longer blocks the code** — 07 and 08 became a weights swap behind the
 `StageClassifier` protocol rather than an integration. Four to five modules of work are
 available without a single labelled image (10 → 11 → 14 → 12).
@@ -133,9 +134,9 @@ Authoritative board: [[Build-Order]].
 | 09 | Inference & Progress | ✅ done | — *built early against a `StubClassifier`, which unblocked 10–14* |
 | 10 | Reports & Remarks | ✅ done | — |
 | 11 | Public Dashboard | ✅ done | — |
-| 12 | Owner Dashboard | pending | 11, 10, 14 + **Q12** |
+| 12 | Owner Dashboard | **▶ next** | **Q12** only |
 | 13 | Firmware | pending | **P1-1** (hardware) |
-| 14 | Realtime | **▶ next** | 09 ✅ |
+| 14 | Realtime | ✅ done | — |
 | 15 | Testing & Evaluation | pending | all |
 | 16 | Deployment | pending | all + **P0-3** |
 

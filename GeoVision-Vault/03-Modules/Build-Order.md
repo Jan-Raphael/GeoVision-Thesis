@@ -29,7 +29,7 @@ updated: 2026-08-14
 | 11 | [[Module-11-Public-Dashboard]] | 04,09 | homepage feed, public folder, search, contact |
 | 12 | [[Module-12-Owner-Dashboard]] | 11 | auth UI, create project, folder, pairing modal, devices |
 | 13 | [[Module-13-Firmware]] | 05 | real ESP32 capturing, geotagging, uploading |
-| 14 | [[Module-14-Realtime]] | 09,12 | WebSocket push, live dashboard updates |
+| 14 | [[Module-14-Realtime]] | 09 | WebSocket push *(built before 12: the transport does not need the owner dashboard, and 12's pairing modal needs it)* |
 | 15 | [[Module-15-Testing-and-Evaluation]] | all | full test suite + every thesis metric/figure |
 | 16 | [[Module-16-Deployment]] | all | one-command compose deploy, docs, demo script |
 
@@ -85,7 +85,7 @@ flowchart LR
 | 11 | ✅ **done** | 2026-08-15 | 2026-08-15 | Full anonymous surface: feed, project folder, profile, search, contact, auth placeholders, 404. 19 component tests; TS strict; landing bundle 77 kB gzip after code-splitting Recharts onto the project route. Fixed a systemic gap — image payloads had no signed URL, so no photograph could render anywhere. Q13 logged. |
 | 12 | planned | | | |
 | 13 | planned | | | |
-| 14 | planned | | | |
+| 14 | ✅ **done** | 2026-08-15 | 2026-08-15 | Event port, connection hub, Redis fan-out, `/ws` with per-project authorization, and a reconnecting typed client. 42 new tests (660 backend, 36 frontend). Cache-patching hook deferred to 12, whose caches it patches; multi-worker + load runs to 15. |
 | 15 | planned | | | |
 | 16 | planned | | | |
 

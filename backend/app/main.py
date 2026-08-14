@@ -31,6 +31,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
     from contextlib import AbstractAsyncContextManager
 
+    from app.infrastructure.realtime import RealtimeSubscriber
+
 logger = logging.getLogger(__name__)
 
 DESCRIPTION = """
@@ -77,11 +79,32 @@ def _build_lifespan(
         # Module 02+ will open the database engine here.
         # Module 05+ will ensure the object-storage bucket exists.
         # Module 09+ will warm the inference service in the worker (not here).
-        # Module 14+ will start the Redis pub/sub subscriber task.
-        yield
-        logger.info("shutting down %s", settings.app_name)
+        subscriber = _start_realtime(settings)
+        if subscriber is not None:
+            await subscriber.start()
+        try:
+            yield
+        finally:
+            if subscriber is not None:
+                await subscriber.stop()
+            logger.info("shutting down %s", settings.app_name)
 
     return lifespan
+
+
+def _start_realtime(settings: Settings) -> RealtimeSubscriber | None:
+    """Build the Redis subscriber, or ``None`` when no broker is configured.
+
+    Tied to the application lifespan so its life is exactly the app's: no
+    orphaned task surviving a reload, and no socket receiving events after
+    shutdown has begun. Without a broker the app still serves — realtime is an
+    optimisation, and the dashboard polls.
+    """
+    if settings.task_queue_backend != "celery":
+        return None
+    from app.infrastructure.realtime import get_hub
+
+    return RealtimeSubscriber(settings.redis_url, get_hub())
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -163,6 +186,7 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
         public_users,
         reports,
         users,
+        ws,
     )
 
     app.include_router(health.router)
@@ -184,6 +208,7 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(predictions.router, prefix=prefix)
     app.include_router(models.router, prefix=prefix)
     app.include_router(reports.router, prefix=prefix)
+    app.include_router(ws.router, prefix=prefix)
 
     # Mounted as the corresponding modules land:
     #   Module 14  ws

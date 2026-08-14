@@ -25,6 +25,7 @@ from fastapi import Depends, Path, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.ports.events import EventPublisher
 from app.application.ports.inference_gateway import InferenceGateway
 from app.application.ports.storage import ObjectStorage
 from app.application.ports.task_queue import TaskQueue
@@ -344,6 +345,21 @@ def get_gateway(settings: SettingsDep) -> InferenceGateway:
 
 
 InferenceGatewayDep = Annotated[InferenceGateway, Depends(get_gateway)]
+
+
+def get_publisher(settings: SettingsDep) -> EventPublisher:
+    """Provide the realtime event publisher.
+
+    Imported lazily so nothing pulls the Redis client in at module import time,
+    and so a deployment without a broker never constructs one.
+    """
+    from app.infrastructure.realtime import get_event_publisher
+
+    publisher: EventPublisher = get_event_publisher(settings)
+    return publisher
+
+
+EventPublisherDep = Annotated[EventPublisher, Depends(get_publisher)]
 
 
 async def get_current_device(

@@ -125,6 +125,21 @@ async def _generate(task: Any, report_id: UUID) -> dict[str, Any]:
             )
         await session.commit()
 
+    from app.application.ports.events import EventType, RealtimeEvent
+    from app.worker.inference import _publish
+
+    await _publish(
+        RealtimeEvent(
+            type=EventType.REPORT_READY,
+            project_id=report.project_id,
+            payload={
+                "report_id": str(report_id),
+                "kind": report.kind.value,
+                "format": report.report_format.value,
+            },
+        )
+    )
+
     return {
         "report_id": str(report_id),
         "status": "ready",

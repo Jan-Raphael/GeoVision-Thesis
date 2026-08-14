@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 
 from celery import shared_task
 
+from app.application.ports.events import EventType, RealtimeEvent
 from app.core.config import get_settings
 from app.domain.entities import (
     BoundingBox,
@@ -32,6 +33,20 @@ from app.domain.enums import ImageStatus, MacroStage, RemarkType, Severity
 from app.domain.value_objects import Confidence, ProgressPct
 
 __all__ = ["predict_adhoc", "process_image", "recompute_window", "service_status"]
+
+
+async def _publish(event: Any) -> None:
+    """Announce a realtime event from inside the worker.
+
+    The worker holds no WebSocket — it cannot, the socket lives in an API
+    process — so it publishes to Redis and something else fans out. Failure is
+    swallowed by the publisher: the prediction is already committed, and the
+    dashboard polls.
+    """
+    from app.infrastructure.realtime import get_event_publisher
+
+    await get_event_publisher(get_settings()).publish(event)
+
 
 logger = logging.getLogger(__name__)
 
@@ -223,6 +238,13 @@ async def _process_image(task: Any, image_id: UUID) -> dict[str, Any]:
             await images.update(_with_status(image, ImageStatus.REJECTED))
             await session.commit()
             logger.info("image %s rejected: %s", image_id, result.quality.reason)
+            await _publish(
+                RealtimeEvent(
+                    type=EventType.IMAGE_REJECTED,
+                    project_id=image.project_id,
+                    payload={"image_id": str(image_id), "reason": result.quality.reason},
+                )
+            )
             return {
                 "image_id": str(image_id),
                 "status": "rejected",
@@ -258,6 +280,21 @@ async def _process_image(task: Any, image_id: UUID) -> dict[str, Any]:
     # Aggregation runs as its own task so that a failure to recompute never
     # costs us the prediction we just stored - and so that several images
     # landing at once collapse into one recompute rather than N.
+    await _publish(
+        RealtimeEvent(
+            type=EventType.PREDICTION_COMPLETED,
+            project_id=image.project_id,
+            payload={
+                "image_id": str(image_id),
+                "stage": classification.class_name,
+                "confidence": round(classification.confidence, 4),
+                "macro_stage": stage.macro.value,
+                "raw_progress_pct": stage.nominal_pct,
+                "low_confidence": not Confidence.from_float(classification.confidence).is_eligible,
+            },
+        )
+    )
+
     recompute_window.delay(str(image.project_id), image.captured_at.isoformat())
 
     return {
@@ -315,6 +352,34 @@ async def _recompute(
             await _system_remark(remarks, project_id, INSPECTION_REMARK, Severity.INFO)
 
         await session.commit()
+
+        snapshot = outcome.snapshot
+        await _publish(
+            RealtimeEvent(
+                type=EventType.PROGRESS_UPDATED,
+                project_id=project_id,
+                payload={
+                    "displayed_pct": float(snapshot.displayed_pct.value),
+                    "macro_stage": snapshot.macro_stage.value,
+                    "stages": {
+                        "foundation_pct": snapshot.foundation_pct,
+                        "framing_pct": snapshot.framing_pct,
+                        "roofing_pct": snapshot.roofing_pct,
+                        "finishing_pct": snapshot.finishing_pct,
+                        "approval_pct": snapshot.approval_pct,
+                    },
+                    "window_start": snapshot.window_start.isoformat(),
+                },
+            )
+        )
+        if outcome.reached_ceiling:
+            await _publish(
+                RealtimeEvent(
+                    type=EventType.APPROVAL_REQUIRED,
+                    project_id=project_id,
+                    payload={"progress_pct": float(snapshot.displayed_pct.value)},
+                )
+            )
 
         return {
             "project_id": str(project_id),

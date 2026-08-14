@@ -69,6 +69,12 @@ class AuditAction(StrEnum):
     REPORT_REQUESTED = "report.requested"
     REPORT_DOWNLOADED = "report.downloaded"
 
+    # Module 14
+    #: A socket asked to follow a project its user cannot view. Refused
+    #: silently on the wire — saying "denied" would confirm the project exists —
+    #: so the audit row is the only record that it was tried.
+    WS_SUBSCRIBE_DENIED = "ws.subscribe_denied"
+
 
 class AuditLogger:
     """Appends audit entries to the caller's transaction."""

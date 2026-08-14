@@ -25,6 +25,12 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from app.application.ports.events import (
+    EventPublisher,
+    EventType,
+    NullEventPublisher,
+    RealtimeEvent,
+)
 from app.application.ports.task_queue import (
     QUEUE_INFERENCE,
     TASK_PROCESS_IMAGE,
@@ -116,6 +122,7 @@ class IngestImage:
         storage: ObjectStorage,
         tasks: TaskQueue,
         *,
+        events: EventPublisher | None = None,
         max_bytes: int = 8 * 1024 * 1024,
         min_width: int = 320,
         min_height: int = 240,
@@ -128,6 +135,10 @@ class IngestImage:
         self._projects = projects
         self._storage = storage
         self._tasks = tasks
+        # Optional so Module 05's own tests, and any deployment without a
+        # broker, construct this exactly as before. Realtime is an
+        # optimisation: the capture is stored either way.
+        self._events = events or NullEventPublisher()
         self._max_bytes = max_bytes
         self._min_width = min_width
         self._min_height = min_height
@@ -224,6 +235,23 @@ class IngestImage:
         # a logging stub today.
         await self._tasks.enqueue(
             TASK_PROCESS_IMAGE, {"image_id": str(image.id)}, queue=QUEUE_INFERENCE
+        )
+        # Announced before the AI has run, so a watching dashboard shows the
+        # capture arriving with a "processing" badge rather than nothing for
+        # however long inference takes.
+        await self._events.publish(
+            RealtimeEvent(
+                type=EventType.IMAGE_RECEIVED,
+                project_id=project.id,
+                payload={
+                    "image_id": str(image.id),
+                    "filename": image.filename,
+                    "captured_at": image.captured_at.isoformat(),
+                    "device_name": device.device_name,
+                    "lat": image.location.latitude if image.location else None,
+                    "lon": image.location.longitude if image.location else None,
+                },
+            )
         )
         return IngestResult(image=image)
 
