@@ -63,6 +63,12 @@ class AuditAction(StrEnum):
     IMAGE_REPROCESSED = "image.reprocessed"
     PROGRESS_RECOMPUTE_REQUESTED = "progress.recompute_requested"
 
+    # Module 10
+    #: A report may be shown to a client or attached to a claim, so who asked
+    #: for one and who took a copy are both worth being able to answer later.
+    REPORT_REQUESTED = "report.requested"
+    REPORT_DOWNLOADED = "report.downloaded"
+
 
 class AuditLogger:
     """Appends audit entries to the caller's transaction."""

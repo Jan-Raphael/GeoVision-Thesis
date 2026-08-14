@@ -2,8 +2,8 @@
 title: Module 10 — Reports, Status & Remarks
 type: module
 module: 10
-status: planned
-updated: 2026-08-12
+status: in-progress
+updated: 2026-08-14
 ---
 
 # Module 10 — Reports (PDF/CSV), Status Derivation & Automatic Remarks
@@ -70,10 +70,12 @@ Module 09. `reportlab`, `matplotlib`, `pandas` (optional).
 
 ## How to run
 ```bash
-celery -A app.infrastructure.tasks.celery_app worker -Q reports -l info
-celery -A app.infrastructure.tasks.celery_app beat -l info
-http POST :8000/api/v1/projects/$PID/reports kind=weekly format=pdf "Authorization:Bearer $TOK"
+.\dev.ps1 worker    # includes the `reports` queue
+http POST :8000/api/v1/projects/$PID/reports kind=weekly report_format=pdf      "Authorization:Bearer $TOK"
 ```
+
+> The Celery app is `app.worker.celery_app` (see [[Module-09-Inference-Service]]), and beat
+> is not wired yet — it belongs to the deferred half below.
 
 ## Testing procedure
 1. Request weekly PDF → 202, then `ready`, then a downloadable non-empty PDF.
@@ -92,11 +94,53 @@ A polished multi-page PDF with charts and a geotagged image gallery, downloadabl
 project folder — one of the strongest demo artifacts in the defense.
 
 ## Done criteria
-- [ ] Weekly / monthly / custom PDF and CSV, generated asynchronously
-- [ ] Charts embedded; disclaimer present
-- [ ] Permission re-checked at download; signed URLs expire
+- [x] Weekly / monthly / custom PDF and CSV, generated asynchronously
+- [x] Charts embedded; disclaimer present
+- [x] Permission re-checked at download; signed URLs expire
 - [ ] Status derivation + automatic remarks running on schedule, deduplicated
 - [ ] Device offline sweep and notifications working
+
+## Delivered — the reports half (2026-08-14)
+
+**The module was split at its own seam.** Its title names two things: report *generation*, and
+the scheduled jobs that keep status and remarks fresh. They share nothing but a module number
+— one renders documents on demand, the other is a beat schedule — so the first half shipped
+alone rather than half-shipping both.
+
+| | |
+|---|---|
+| `app/domain/services/reporting.py` | `ReportPeriod`, `resolve_period` — what "weekly" means |
+| `app/domain/reporting.py` | `ReportData`, `CaptureRow` — the assembled bundle (ADR-030) |
+| `app/infrastructure/reports/charts.py` | progress curve, stage bars, capture histogram (Agg) |
+| `app/infrastructure/reports/pdf_builder.py` | the 9-section ReportLab document |
+| `app/infrastructure/reports/csv_builder.py` | both tables, RFC 4180 |
+| `app/worker/reports.py` | `reports.generate`, on its own `reports` queue |
+| `app/api/v1/routers/reports.py` | request · list · status · download |
+
+**803 tests.** A real 5-page, 114 KB PDF renders in a unit test — including an assertion that
+the required disclaimer text is present, checked with ReportLab's page compression disabled
+because a naive byte search on a compressed stream finds nothing and would have passed
+vacuously.
+
+Three choices worth defending:
+
+- **Periods are always complete, and always in the project's timezone.** A weekly report run
+  on a Wednesday covers the previous Monday–Sunday, not the three days so far; a partial
+  period makes the curve appear to flatten for no reason. The zone matters because a Manila
+  day starts at 16:00 UTC the day before — a naive UTC range silently reports the wrong days.
+- **The CSV is one file with two tables**, blank-line separated, each with its own header. The
+  format enum is `pdf|csv` and a download serves one object; a ZIP would have been a third
+  format in all but name.
+- **An empty period still produces a valid report** saying so. "No captures in three weeks" is
+  one of the more useful things a report can say, and it is exactly when an owner wants a
+  document to show somebody.
+
+## Still to build — the maintenance half
+
+`infrastructure/tasks/maintenance.py` and the beat schedule: `projects.refresh_status` (6 h),
+`devices.sweep_offline` (30 min), `remarks.emit_system` (6 h), `reports.cleanup_expired`
+(daily), plus remark deduplication and the offline-device notification. Testing procedure
+items 6-9 in this note cover them and are not yet met.
 
 ## Related
 [[Project-Status-Rules]] · [[Progress-Calculation]] · [[API-Contract]] · [[Module-12-Owner-Dashboard]]

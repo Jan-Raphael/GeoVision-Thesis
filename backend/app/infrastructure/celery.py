@@ -45,7 +45,7 @@ celery_app = Celery(
     "geovision",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.worker.inference"],
+    include=["app.worker.inference", "app.worker.reports"],
 )
 
 celery_app.conf.update(
@@ -76,6 +76,8 @@ celery_app.conf.update(
         # reasons unrelated to whether it works.
         "inference.predict_adhoc": {"queue": "interactive"},
         "inference.service_status": {"queue": "interactive"},
+        # Slow, CPU-bound, and unrelated to scoring images.
+        "reports.generate": {"queue": "reports"},
     },
     result_expires=3600,
     # Fail fast when the broker is unreachable. The producer is a web request

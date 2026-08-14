@@ -170,10 +170,20 @@ Body: `{message, remark_type, severity, is_public, effective_from?, effective_to
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/projects/{id}/reports` | `{kind: weekly\|monthly\|custom, format: pdf\|csv, period_start?, period_end?}` → `202 {report_id, status:"queued"}` |
-| GET | `/projects/{id}/reports` | list |
-| GET | `/reports/{id}` | status |
-| GET | `/reports/{id}/download` | signed URL / streamed file |
+| POST | `/projects/{id}/reports` | `{kind: weekly\|monthly\|custom, report_format: pdf\|csv, period_start?, period_end?}` → **202** with the full report row. Requires `report:generate` (employee+). **400** if a custom period is inverted or longer than 366 days; **422** if dates are supplied for a non-custom kind |
+| GET | `/projects/{id}/reports` | list, newest first, failures included |
+| GET | `/projects/{id}/reports/{report_id}` | status: `queued` → `processing` → `ready` \| `failed` (with `error`) |
+| GET | `/projects/{id}/reports/{report_id}/download` | `{url, filename, report_format, expires_in_seconds}`. **409** while not ready |
+
+> **Periods are resolved server-side, and are always complete.** `weekly` is the last full
+> Monday–Sunday **in the project's timezone**; `monthly` is the last full calendar month;
+> `custom` is caller-supplied and capped at 366 days. Resolution happens in the request, not
+> the worker, so an impossible range fails as a 400 the caller can act on instead of a
+> `failed` row they have to go and find.
+>
+> Report routes are nested under their project for the same reason image routes are
+> (ADR-027). Download re-checks `report:generate` **at download time** rather than trusting
+> the request that created the report — membership can be revoked in between.
 
 ## Models & System
 

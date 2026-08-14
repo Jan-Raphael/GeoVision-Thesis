@@ -22,6 +22,7 @@ from app.infrastructure.celery import celery_app
 # Imported for its registration side effect: a task Celery has never imported is
 # a task it will refuse to run, with an unhelpful "unregistered task" error.
 from app.worker import inference as _inference  # noqa: F401
+from app.worker import reports as _reports  # noqa: F401
 
 __all__ = ["celery_app"]
 

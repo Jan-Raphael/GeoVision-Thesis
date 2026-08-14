@@ -518,6 +518,33 @@ that takes hundreds. (b) Disposing the shared engine after each task — that wo
 tear down the pool the API process also uses if the two ever ran in one process, and it
 treats the symptom rather than the loop-scoping that causes it.
 
+## ADR-030 - The report data contract lives in the domain, not the application layer
+**Status:** Accepted · 2026-08-14
+**Context.** A report is assembled once (query everything the period covers) and then
+rendered twice over (PDF, CSV). The renderers import ReportLab and matplotlib, so they are
+unambiguously **infrastructure**. The obvious home for the assembled bundle was the
+application layer beside the use cases — and putting it there immediately broke the layers
+contract, because `app.infrastructure` may not import `app.application`. The violation was
+real rather than pedantic: it is the direction that, left alone, ends with renderers calling
+repositories.
+**Decision.** `ReportData` and `CaptureRow` live in `app/domain/reporting.py`, beside
+`ReportPeriod` in `app/domain/services/reporting.py`. They aggregate domain entities and
+nothing else, so both the application layer (which fills them) and infrastructure (which
+formats them) may read them.
+**Consequences.** The builders are pure functions from a domain aggregate to bytes: they
+query nothing, which is precisely what guarantees a report cannot disagree with the dashboard
+by fetching its own numbers. The same property makes them testable without a database — the
+PDF is rendered for real in a unit test, including an assertion that the required disclaimer
+is present. Cost: one more concept in the domain that is arguably a read model rather than a
+business rule; the precedent is `StageBreakdown` and `ProjectSignals`, which are the same
+shape.
+**Rejected.** (a) Leaving it in application and exempting infrastructure from the contract —
+the exemption would apply to every future infrastructure module, not just this one. (b)
+Moving the builders into the application layer — it would put ReportLab and matplotlib in the
+layer whose job is orchestration, and the contract that keeps SQLAlchemy out of there exists
+for the same reason. (c) Passing primitives (dicts) across the boundary — untyped, and every
+renderer would re-derive the same aggregates by hand.
+
 ---
 
 ## Template

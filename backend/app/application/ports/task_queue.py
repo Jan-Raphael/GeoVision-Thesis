@@ -103,3 +103,9 @@ QUEUE_INFERENCE = "inference"
 
 
 TASK_RECOMPUTE_WINDOW = "progress.recompute_window"
+
+#: Module 10. Its own queue: rendering a PDF is slow, CPU-bound, and completely
+#: unrelated to scoring images, so a month-long report must not sit in front of
+#: the captures arriving while it renders.
+TASK_GENERATE_REPORT = "reports.generate"
+QUEUE_REPORTS = "reports"

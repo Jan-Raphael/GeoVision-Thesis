@@ -161,6 +161,7 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
         projects,
         public,
         public_users,
+        reports,
         users,
     )
 
@@ -182,9 +183,9 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(progress.router, prefix=prefix)
     app.include_router(predictions.router, prefix=prefix)
     app.include_router(models.router, prefix=prefix)
+    app.include_router(reports.router, prefix=prefix)
 
     # Mounted as the corresponding modules land:
-    #   Module 10  reports
     #   Module 14  ws
 
 
