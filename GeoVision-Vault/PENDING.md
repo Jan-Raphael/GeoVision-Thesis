@@ -43,8 +43,10 @@ updated: 2026-08-14
 **Nothing is blocking code right now.** Modules 01–06 and **09** are done, and the whole
 stack has been exercised end to end against live services.
 
-**Build next: [[Module-12-Owner-Dashboard]].** Nothing blocks it - Q12 is fixed (ADR-031), and
-modules 01-06, 09-11 and 14 are all done.
+**Build next: finish [[Module-12-Owner-Dashboard]]**, then [[Module-15-Testing-and-Evaluation]]
+and [[Module-16-Deployment]]. Module 12's spine is done - auth, profile, create project, the
+folder workspace, the pairing modal - and what remains is listed in its note. 13 waits on
+hardware; 07/08 on the dataset.
 After 12: 15 (testing/evaluation), 16 (deployment). 13 waits on hardware; 07/08 on the dataset. Module 09 was built ahead of 07/08 against a deterministic `StubClassifier`, which
 means **the dataset no longer blocks the code** — 07 and 08 became a weights swap behind the
 `StageClassifier` protocol rather than an integration. Four to five modules of work are
@@ -133,7 +135,7 @@ Authoritative board: [[Build-Order]].
 | 09 | Inference & Progress | ✅ done | — *built early against a `StubClassifier`, which unblocked 10–14* |
 | 10 | Reports & Remarks | ✅ done | — |
 | 11 | Public Dashboard | ✅ done | — |
-| 12 | Owner Dashboard | **▶ next** | - |
+| 12 | Owner Dashboard | ◑ spine done | - |
 | 13 | Firmware | pending | **P1-1** (hardware) |
 | 14 | Realtime | ✅ done | — |
 | 15 | Testing & Evaluation | pending | all |

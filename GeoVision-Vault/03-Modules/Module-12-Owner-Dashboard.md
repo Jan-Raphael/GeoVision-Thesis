@@ -2,8 +2,8 @@
 title: Module 12 — Owner Dashboard
 type: module
 module: 12
-status: planned
-updated: 2026-08-12
+status: in-progress
+updated: 2026-08-15
 ---
 
 # Module 12 — Authenticated Dashboard (project owners & collaborators)
@@ -118,3 +118,47 @@ minutes with the device simulator.
 
 ## Related
 [[Module-11-Public-Dashboard]] · [[Device-Pairing-Protocol]] · [[Roles-and-Permissions]] · [[Module-14-Realtime]]
+
+
+## Delivered - the spine (2026-08-15)
+
+Scoped deliberately: this is the largest module in the project, and the session had a
+budget. What shipped is the path that makes the dashboard real and the defense demo work,
+whole rather than half-finished; what did not is listed below and is genuinely absent, not
+half-wired.
+
+| Route | |
+|---|---|
+| `/login`, `/register` | real auth; registration redirects to `/me` per spec B |
+| `/me` | profile + project cards with progress rings and status badges |
+| `/projects/new` | create form with a **live, permanent** project-code preview |
+| `/projects/:id/manage` | the folder workspace |
+
+Supporting: `lib/auth.ts` (session, one transparent refresh on 401), `lib/owner.ts` (typed
+authenticated surface + hooks), `features/auth/session.tsx` (context + `RequireAuth`),
+`features/devices/PairingModal.tsx`, and **`features/realtime/useRealtime.ts`** - the hook
+[[Module-14-Realtime]] deferred, now that the caches it patches exist.
+
+**45 frontend tests** (up from 36). TypeScript strict, ESLint clean, build green. The owner
+surface is its own chunk, so the public landing page stays at **78 kB gzipped**.
+
+Three things worth defending:
+
+- **Every action button reads the server's `permissions` block.** Never a role inferred in
+  the client. Hiding a button is not security - the API enforces it too - but offering a
+  viewer an action that returns 403 is a lie the UI tells. Tests pin that a *missing*
+  permission is denied, so it fails closed.
+- **The pairing modal confirms itself** on `device.paired`, and still works with the socket
+  down: the countdown runs, and the camera appears in the Devices list via the folder's
+  60-second poll. Realtime makes it feel finished; polling is what makes it correct.
+- **Approval is deliberate.** A dialog that states it finalises at 100%, requires typed
+  inspection notes, and says it is recorded against a name (ADR-007). The ring reads "AI
+  estimate" until that has happened.
+
+## Not built yet
+
+`/projects/:id/devices` and `/members` as standalone pages (the folder shows both read-only),
+`/invitations`, `/notifications`, profile editing and the public/private toggle, asset upload,
+the report format/kind modal (the folder requests a weekly PDF directly), and the image
+lightbox with detection overlays. The Playwright owner journey belongs to
+[[Module-15-Testing-and-Evaluation]].

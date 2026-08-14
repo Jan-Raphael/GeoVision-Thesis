@@ -128,10 +128,11 @@ Four decisions worth defending:
 
 ## Deferred, with reasons
 
-- **`useRealtime.ts` cache-patching.** The cache-patching map in this note patches
-  devices, reports, the pairing modal, and the notification bell — **none of which
-  exist yet**; they arrive with [[Module-12-Owner-Dashboard]]. Wiring is one hook
-  against caches that are defined there. The transport is finished and tested.
+- ~~**`useRealtime.ts` cache-patching.**~~ ✅ **Delivered with
+  [[Module-12-Owner-Dashboard]]** on 2026-08-15, as planned - one hook against the caches
+  defined there. It patches progress, status, and approval state in place, and invalidates
+  for events whose rows the client cannot rebuild from the payload (a capture needs its
+  signed thumbnail URL, a device its derived liveness).
 - **The two-worker fan-out run** (testing procedure item 3) and the 50-socket load
   test belong to [[Module-15-Testing-and-Evaluation]], which owns multi-process and
   browser testing. The code path is built for it: Redis from the start, exactly

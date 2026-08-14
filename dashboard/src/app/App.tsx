@@ -11,9 +11,11 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
 import { PublicLayout } from '@/app/layout';
 import { SkeletonGrid } from '@/components/common';
+import { RequireAuth, SessionProvider } from '@/features/auth/session';
 import { createQueryClient } from '@/lib/query-client';
+import { LoginPage, RegisterPage } from '@/pages/auth';
 import { FeedPage } from '@/pages/feed';
-import { AuthPlaceholderPage, NotFoundPage } from '@/pages/misc';
+import { NotFoundPage } from '@/pages/misc';
 
 /**
  * Everything except the homepage is loaded on demand.
@@ -35,6 +37,19 @@ const SearchPage = lazy(() =>
 const ContactPage = lazy(() =>
   import('@/pages/misc').then((module) => ({ default: module.ContactPage })),
 );
+// The owner surface is a separate chunk: a visitor browsing public projects
+// never downloads the dashboard they cannot sign in to.
+const MePage = lazy(() => import('@/pages/me').then((module) => ({ default: module.MePage })));
+const CreateProjectPage = lazy(() =>
+  import('@/pages/me').then((module) => ({ default: module.CreateProjectPage })),
+);
+const ManageProjectPage = lazy(() =>
+  import('@/pages/manage').then((module) => ({ default: module.ManageProjectPage })),
+);
+
+function Deferred({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<SkeletonGrid count={1} />}>{children}</Suspense>;
+}
 
 /** The route table, exported so tests can mount it under a memory router. */
 export function PublicRoutes() {
@@ -74,8 +89,17 @@ export function PublicRoutes() {
             </Suspense>
           }
         />
-        <Route path="login" element={<AuthPlaceholderPage mode="login" />} />
-        <Route path="register" element={<AuthPlaceholderPage mode="register" />} />
+        <Route path="login" element={<LoginPage />} />
+        <Route path="register" element={<RegisterPage />} />
+
+        <Route element={<RequireAuth />}>
+          <Route path="me" element={<Deferred><MePage /></Deferred>} />
+          <Route path="projects/new" element={<Deferred><CreateProjectPage /></Deferred>} />
+          <Route
+            path="projects/:projectId/manage"
+            element={<Deferred><ManageProjectPage /></Deferred>}
+          />
+        </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
@@ -86,7 +110,9 @@ export function App() {
   return (
     <QueryClientProvider client={createQueryClient()}>
       <BrowserRouter>
-        <PublicRoutes />
+        <SessionProvider>
+          <PublicRoutes />
+        </SessionProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );
