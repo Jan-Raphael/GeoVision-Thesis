@@ -1,0 +1,95 @@
+# ---------------------------------------------------------------------------
+# GeoVision preprocessing pipeline
+#
+# THE ORDER OF THIS LIST IS THE PIPELINE. Training and serving both build from
+# this file, and there is no second place it is written down. Change it here or
+# train/serve diverge — silently, because skew never raises an error, it just
+# makes the model wrong in production while the test set still looks fine.
+#
+# Every change to this file changes the pipeline FINGERPRINT, which Module 07
+# stamps into the checkpoint and Module 09 verifies at load. So a change made
+# here after training will be caught, loudly, rather than quietly degrading
+# accuracy.
+#
+# Setting `enabled: false` removes a step entirely — that is how the ablation
+# study in Evaluation-Plan.md is run: a config change, never a code change.
+#
+# Spec: GeoVision-Vault/03-Modules/Module-06-AI-Preprocessing.md
+# ---------------------------------------------------------------------------
+
+version: 1
+
+steps:
+  # 1. Quality gate — cheapest first, and measured on the ORIGINAL.
+  #
+  # Blur variance and mean brightness both depend on resolution and on the
+  # contrast pass, so measuring later would make a photograph's score depend on
+  # pipeline settings. The same photograph must always score the same, or the
+  # dataset audit ("how many of my own captures would have been rejected?")
+  # means nothing.
+  #
+  # Thresholds are omitted deliberately: they default to
+  # ai/progress/constants.py, which is their single definition site. Setting
+  # them here would create a second one.
+  - name: quality_gate
+    enabled: true
+
+  # 2. Geometry before photometry.
+  #
+  # Warping resamples pixels, so any contrast enhancement applied first would be
+  # smeared by the interpolation. A device with no homography passes through
+  # untouched — cameras run uncalibrated for their first days on site, and
+  # refusing their captures would lose exactly the early-stage images the
+  # project needs.
+  - name: perspective_rectify
+    enabled: true
+
+  # 3. Photometric normalisation — the step that matters most here.
+  #
+  # Captures happen at 07:00 and 16:00. The same wall at the same stage can
+  # differ more between those two than two genuinely different stages differ
+  # from each other. Without this the classifier learns the time of day.
+  - name: normalize
+    enabled: true
+    clip_limit: 2.0
+    tile_grid_size: [8, 8]
+    white_balance: true
+
+  # 4. Resize BEFORE denoise.
+  #
+  # The vault specifies denoise at step 5 and resize at step 6, and says
+  # "resize before denoise if latency is tight (measure it)". Measured on the
+  # target CPU, median of 10 warm runs over a 1600x1200 frame: the bilateral
+  # filter costs 30.1 ms at full resolution and 4.0 ms at 224x224 — 7.5x, since
+  # its cost scales with pixel count. Swapping the two takes the whole pipeline
+  # from ~114 ms to ~88 ms per image, about 23%.
+  #
+  # The output is near-identical either way: INTER_AREA averages over the source
+  # region, so the downscale has already removed most sensor noise before the
+  # filter runs. Recorded as a deliberate deviation from the note in ADR-024,
+  # with the ablation left runnable by swapping these two entries.
+  - name: resize
+    enabled: true
+    width: 224
+    height: 224
+
+  # 5. Edge-preserving denoise.
+  #
+  # Bilateral, not Gaussian: what the classifier reads on a site is edges — the
+  # line where formwork meets poured concrete, the grid of scaffolding. A
+  # Gaussian smooths noise and edges alike.
+  - name: denoise
+    enabled: true
+    diameter: 9
+    sigma_color: 75.0
+    sigma_space: 75.0
+
+# Steps 1-5 above are shared by training and serving, and are all deterministic.
+#
+# What comes next is NOT in this file, by design:
+#   * Augmentation (training only)  -> ai/data/transforms.py, Module 07
+#   * ImageNet normalise -> tensor  -> ai/models/, Module 07
+#
+# Both would break a rule this module depends on. Augmentation is random, and
+# this pipeline must be byte-for-byte reproducible. Tensor conversion needs
+# torch, and preprocessing stays torch-free so it can run in the API process.

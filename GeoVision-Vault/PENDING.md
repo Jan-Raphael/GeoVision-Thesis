@@ -44,9 +44,16 @@ updated: 2026-08-14
 runs. The critical path has moved off the keyboard and onto the calendar: everything in P1
 below is now what actually decides whether this finishes on time.
 
-**Build next:** [[Module-06-AI-Preprocessing]] needs no services and no labelled data, and
-it is correctly sequenced before annotation anyway — settle the preprocessing pipeline
-*before* annotating, or you annotate twice.
+**Build next: nothing.** Modules 01–06 are done, and that was the last module buildable
+without labelled images. [[Module-07-Classifier-Training]] needs the dataset; 08 needs it too;
+09 needs 07 and 08. **The critical path is now entirely calendar-bound** — every remaining
+hour of coding is blocked behind P1-3 and P1-4 below.
+
+> The preprocessing pipeline was deliberately settled *before* annotation begins. Annotate
+> first and you annotate twice, because the quality gate decides which images are worth
+> labelling at all. Run the dataset audit (`ai.preprocessing.quality.assess` over your
+> collected images) as you gather them — how many would have been rejected is both a useful
+> filter and an interesting thesis result.
 
 > **Before deploying anything beyond your laptop**, set `GV_DEVICE_SECRET_KEY` and keep a
 > backup of it. It encrypts every paired camera's secret (ADR-020); lose it and every camera
@@ -110,8 +117,8 @@ Authoritative board: [[Build-Order]].
 | 03 | Auth & Users | ✅ done | — |
 | 04 | Projects & Folders | ✅ done | — |
 | 05 | Device Pairing & Ingestion | ✅ done | — |
-| 06 | AI Preprocessing | **▶ next — available now** | — nothing |
-| 07 | Classifier Training | pending | **P1-3, P1-4** (dataset) |
+| 06 | AI Preprocessing | ✅ done | — |
+| 07 | Classifier Training | **▶ next — blocked** | **P1-3, P1-4** (dataset) |
 | 08 | YOLO Detection | pending | P1-3, P1-4 |
 | 09 | Inference & Progress | pending | 05, 07, 08 — *the progress engine can be built early against a `StubClassifier`* |
 | 10 | Reports & Remarks | pending | 09 |

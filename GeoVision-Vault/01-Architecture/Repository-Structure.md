@@ -2,7 +2,7 @@
 title: Repository Structure
 type: architecture
 status: canonical
-updated: 2026-08-12
+updated: 2026-08-14
 ---
 
 # Repository Structure
@@ -28,11 +28,16 @@ GeoVision-Project/
 │   │   ├── transforms.py            # Albumentations train/val/test pipelines
 │   │   └── splitter.py              # 70/15/15 stratified split
 │   ├── preprocessing/
-│   │   ├── pipeline.py              # PreprocessingPipeline (composable steps)
+│   │   ├── pipeline.py              # PreprocessingPipeline + config fingerprint (ADR-025)
+│   │   ├── types.py                 # step Protocol, CalibrationContext
+│   │   ├── errors.py                # PreprocessingError / DecodeError / ConfigError
 │   │   ├── perspective.py           # homography rectification
 │   │   ├── normalize.py             # CLAHE / white balance
 │   │   ├── denoise.py               # bilateral filter
-│   │   └── quality.py               # blur, darkness, occlusion rejection
+│   │   ├── resize.py                # letterbox to 224 / 640
+│   │   ├── quality.py               # blur, darkness, occlusion rejection
+│   │   ├── calibration.py           # 4 clicked corners -> devices.homography
+│   │   └── demo.py                  # before/after strip (thesis Fig. 6) + benchmark
 │   ├── models/
 │   │   ├── base.py                  # StageClassifier / ObjectDetector protocols
 │   │   ├── resnet18.py              # transfer-learning head

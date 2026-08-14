@@ -1,18 +1,63 @@
-"""OpenCV preprocessing pipeline and image quality gate.
+"""OpenCV preprocessing: the pipeline shared by training and serving.
 
-Implemented in **Module 06**. Spec:
-``GeoVision-Vault/03-Modules/Module-06-AI-Preprocessing.md``.
+Pure image-in, image-out. No database, no HTTP, no torch — which is what lets the
+identical code run inside a training loop and inside the inference worker, and is
+the only real defence against train/serve skew.
 
-The same pipeline runs at training time and at serving time; that is what
-prevents train/serve skew. Planned contents:
+    from ai.preprocessing import PreprocessingPipeline
 
-``pipeline.py``    composable ``PreprocessingPipeline`` built from YAML
-``perspective.py`` homography rectification to a canonical facade view
-``normalize.py``   CLAHE on the LAB L-channel + gray-world white balance
-``denoise.py``     bilateral filter (edge-preserving)
-``resize.py``      aspect-preserving resize + letterbox pad
-``quality.py``     blur / darkness / occlusion gate
-``calibration.py`` build a device homography from 4 reference points
+    pipeline = PreprocessingPipeline.from_config()
+    result = pipeline.run(image, ctx)
+
+Spec: ``GeoVision-Vault/03-Modules/Module-06-AI-Preprocessing.md``.
 """
 
-from __future__ import annotations
+from ai.preprocessing.calibration import (
+    homography_from_corners,
+    homography_from_json,
+    homography_to_json,
+)
+from ai.preprocessing.denoise import BilateralDenoise, bilateral_denoise
+from ai.preprocessing.errors import ConfigError, DecodeError, PreprocessingError
+from ai.preprocessing.normalize import ClaheNormalize, apply_clahe, gray_world_white_balance
+from ai.preprocessing.perspective import PerspectiveRectify, rectify
+from ai.preprocessing.pipeline import (
+    DEFAULT_CONFIG_PATH,
+    PreprocessingPipeline,
+    PreprocessingResult,
+    decode,
+    load_image,
+)
+from ai.preprocessing.quality import QualityFlag, QualityGate, QualityReport, assess
+from ai.preprocessing.resize import LetterboxResize, letterbox
+from ai.preprocessing.types import CalibrationContext, Image, PreprocessingStep
+
+__all__ = [
+    "DEFAULT_CONFIG_PATH",
+    "BilateralDenoise",
+    "CalibrationContext",
+    "ClaheNormalize",
+    "ConfigError",
+    "DecodeError",
+    "Image",
+    "LetterboxResize",
+    "PerspectiveRectify",
+    "PreprocessingError",
+    "PreprocessingPipeline",
+    "PreprocessingResult",
+    "PreprocessingStep",
+    "QualityFlag",
+    "QualityGate",
+    "QualityReport",
+    "apply_clahe",
+    "assess",
+    "bilateral_denoise",
+    "decode",
+    "gray_world_white_balance",
+    "homography_from_corners",
+    "homography_from_json",
+    "homography_to_json",
+    "letterbox",
+    "load_image",
+    "rectify",
+]

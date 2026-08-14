@@ -2,7 +2,7 @@
 title: Progress Calculation
 type: domain
 status: canonical
-updated: 2026-08-12
+updated: 2026-08-14
 ---
 
 # Progress Calculation — the core algorithm
@@ -156,7 +156,19 @@ dipped, and the ratchet held the displayed number steady because only one window
 
 ## 9. Constants (single definition site)
 
-`ai/progress/constants.py` — imported by both `ai/` and `backend/`. Never re-typed.
+`ai/progress/constants.py` — the definition site. Never re-typed by hand.
+
+> **Corrected 2026-08-14.** This previously said "imported by both `ai/` and `backend/`".
+> The backend **cannot** import it: its base dependency group deliberately excludes
+> `geovision-ai` so the API process never loads torch (ADR-011), and installing the package
+> to read two floats would pull torch into every API container.
+>
+> So the two or three values the backend genuinely needs are restated in
+> `backend/app/domain/value_objects.py`, and `scripts/check_constants_parity.py` — run in CI
+> — **parses both files and fails the build if they disagree**. No import in either
+> direction, nothing installed. See [[ADR-Index|ADR-023]]. A constant used by only one side
+> is not mirrored: making the backend carry a number it has no use for is worse duplication
+> than none.
 
 ```python
 MIN_CONFIDENCE = 0.60

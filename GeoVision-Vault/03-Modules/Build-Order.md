@@ -77,8 +77,8 @@ flowchart LR
 | 03 | ✅ **done** | 2026-08-13 | 2026-08-13 | Auth, profiles, permission matrix, per-account throttling. 327 tests. Audit found 4 security gaps; all fixed. Avatar upload deferred to M04. |
 | 04 | ✅ **done** | 2026-08-13 | 2026-08-13 | Projects, folder payload, collaboration, assets, remarks, public surface. 413 tests. Storage port (ADR-018) removed the MinIO dependency. |
 | 05 | ✅ **done** | 2026-08-14 | 2026-08-14 | Pairing + QR, HMAC ingest, race-free naming, device health, simulator. 509 tests. Corrected the vault's hashed-secret contradiction (ADR-020) and a per-process lock key that would only have failed in production (ADR-022). |
-| 06 | ▶ **next** | | | Pure OpenCV + Albumentations 2.x; no server dependency |
-| 07 | planned | | | |
+| 06 | ✅ **done** | 2026-08-14 | 2026-08-14 | Preprocessing pipeline, quality gate, calibration, thesis Figure 6, ~88 ms/image. 113 tests. Added a config fingerprint (ADR-025) and a CI parity guard for shared constants (ADR-023); resize/denoise order reversed on measurement (ADR-024). |
+| 07 | ▶ **next** | | | **Blocked on the dataset** — P1-3, P1-4 |
 | 08 | planned | | | |
 | 09 | planned | | | |
 | 10 | planned | | | |

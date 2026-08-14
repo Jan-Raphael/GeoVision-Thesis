@@ -33,6 +33,12 @@ jobs:
       - name: Assert TensorFlow / Keras absent
         run: python scripts/check_no_tensorflow.py
 
+      # The backend cannot import ai/ (that would pull torch into the API
+      # process), so a few thresholds are necessarily restated. This parses both
+      # files rather than importing them, so it needs nothing installed.
+      - name: Assert shared constants agree across ai/ and backend/
+        run: python scripts/check_constants_parity.py
+
   lint:
     name: Lint & type check
     runs-on: ubuntu-latest

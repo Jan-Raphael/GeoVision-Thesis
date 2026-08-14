@@ -355,6 +355,75 @@ it.
 the lock already gives); `SELECT … FOR UPDATE` on the project row (serialises *all* writes
 to a project, not just same-day sequence allocation).
 
+## ADR-023 - Shared constants are parsed, not imported, across `ai/` and `backend/`
+**Status:** Accepted 2026-08-14 · corrects [[Progress-Calculation]] §9
+**Context.** §9 names `ai/progress/constants.py` as the single definition site for every
+threshold, "imported by both `ai/` and `backend/`". That import cannot happen. The backend's
+base dependency group deliberately excludes `geovision-ai` so the API process never loads
+torch (ADR-011), and installing the package to read two numbers would drag torch into every
+API container. The duplication already existed before anyone noticed: `MACHINE_CEILING` and
+`MIN_ELIGIBLE` sit in `backend/app/domain/value_objects.py` as well.
+**Decision.** `ai/progress/constants.py` stays the definition site. The handful of values the
+backend genuinely needs are restated there, and `scripts/check_constants_parity.py` — run in
+the `constraints` CI job — **parses both files with `ast` and fails the build if they
+disagree**. No import in either direction, no package installed, no torch, no virtualenv;
+it runs in under a second against a bare Python.
+**Consequences.** The stated invariant is now actually enforced rather than merely asserted
+in a note, and it is enforced without weakening the dependency boundary that keeps torch out
+of the API. Divergence becomes a red build with the two values printed side by side. Cost: a
+small bespoke script, and a `PAIRS` table that must be extended when a genuinely shared
+constant is added — a constant used by only one side deliberately does *not* go in it, since
+forcing the backend to carry a number it has no use for is worse duplication than none.
+**Rejected.** Adding `geovision-ai` to the backend's dev group and writing a normal import
+test — pulls torch into every developer environment and CI lint job to check two floats, and
+still leaves the runtime duplication unguarded. A shared YAML both packages parse at runtime
+— moves the numbers out of code, where they are least readable, and adds a file-read to a
+hot path. Accepting undocumented duplication — this is precisely the defect that stays
+invisible until a thesis figure disagrees with the running system.
+
+## ADR-024 - Resize before denoise, reversing the documented step order
+**Status:** Accepted 2026-08-14 · amends [[Module-06-AI-Preprocessing]]
+**Context.** The module note orders the pipeline denoise (5) then resize (6), while also
+saying "bilateral filter is slow at full resolution; resize before denoise if latency is
+tight (measure it; note the choice in the thesis)". So: measured.
+**Decision.** Resize precedes denoise. Median of 10 warm runs on the target CPU over a
+1600x1200 frame: bilateral filtering costs **30.1 ms** at full resolution and **4.0 ms** at
+224x224 — 7.5x, since its cost scales with pixel count. The whole pipeline goes from ~114 ms
+to **~88 ms** per image, about 23%.
+**Consequences.** Materially cheaper per image, which matters when a backlog of several days
+arrives at once from a camera that was offline. Output is near-identical either way because
+`INTER_AREA` averages over the source region and has already removed most sensor noise
+before the filter runs. The ordering is a two-line swap in `preprocessing.yaml`, so the
+ablation stays runnable for the thesis — and the pipeline fingerprint differs between the two
+orderings, so a run can always be attributed to one or the other. Cost: a documented
+deviation from the note, and a real (if small) loss of filtering fidelity on noise that only
+exists at full resolution.
+**Rejected.** Following the note as written — 30% more CPU per image for no measurable
+quality gain. Dropping the bilateral filter entirely — it is what preserves the formwork and
+scaffolding edges the classifier reads; a Gaussian at the same strength does not.
+
+## ADR-025 - The preprocessing config carries a fingerprint
+**Status:** Accepted 2026-08-14
+**Context.** Module 06 exists to prevent train/serve skew, and the mechanism given for that is
+"both sides build from `preprocessing.yaml`". That prevents *accidental* divergence but
+detects nothing: edit the config after training and the model is served through a pipeline it
+was never trained on. Skew does not raise an error. The test set stays excellent while
+production accuracy quietly collapses.
+**Decision.** `PreprocessingPipeline.fingerprint` is a 16-hex-character SHA-256 over every
+step's position, name, and declared parameters. Module 07 writes it into the checkpoint
+metadata (the `ai_models.metrics` JSONB column, so no migration is needed); Module 09
+compares it at model load and refuses to serve on a mismatch.
+**Consequences.** The one failure this module exists to prevent becomes a loud startup error
+instead of a silent accuracy loss, and every stored prediction is attributable to an exact
+pipeline. Each step must declare its parameters honestly in `describe()` — a parameter
+omitted there is one that can still differ unnoticed, which is the single thing to check when
+reviewing a new step. YAML lists are normalised to tuples so that a pipeline built from the
+config and the identical pipeline built in Python do not fingerprint apart.
+**Rejected.** Hashing the config *file* — whitespace and comment edits would change it, so
+the check would cry wolf and get disabled. A hand-maintained version integer — it is only
+correct while somebody remembers to bump it, and the failure mode of forgetting is exactly
+the one being guarded against.
+
 ---
 
 ## Template

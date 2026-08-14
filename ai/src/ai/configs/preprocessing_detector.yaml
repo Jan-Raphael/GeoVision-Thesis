@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------------------
+# Preprocessing for the YOLOv8 detector (Module 08).
+#
+# Identical to preprocessing.yaml except for the target size: 640x640 rather
+# than 224x224. Kept as a separate file rather than a runtime override so that
+# each model's pipeline has its OWN fingerprint — the classifier and the
+# detector are trained separately and must be able to disagree about their
+# preprocessing without one silently inheriting the other's.
+#
+# When editing, change BOTH files unless the difference is deliberate.
+# ---------------------------------------------------------------------------
+
+version: 1
+
+steps:
+  - name: quality_gate
+    enabled: true
+
+  - name: perspective_rectify
+    enabled: true
+
+  - name: normalize
+    enabled: true
+    clip_limit: 2.0
+    tile_grid_size: [8, 8]
+    white_balance: true
+
+  # Resize before denoise, for the reason measured in preprocessing.yaml. The
+  # saving is smaller here — 640x640 is 8x the pixels of 224x224 — but the
+  # ordering must match the classifier's or the two pipelines diverge in a way
+  # that is invisible when comparing their outputs side by side.
+  - name: resize
+    enabled: true
+    width: 640
+    height: 640
+
+  - name: denoise
+    enabled: true
+    diameter: 9
+    sigma_color: 75.0
+    sigma_space: 75.0

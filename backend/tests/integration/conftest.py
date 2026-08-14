@@ -53,6 +53,13 @@ def _test_settings() -> Settings:
             "rate_limit_enabled": False,
             "storage_backend": "local",
             "local_storage_path": Path(tempfile.gettempdir()) / "geovision-test-storage",
+            # In-memory replay protection, so the ingest suite needs no Redis
+            # (ADR-021). The default is "redis" because that is correct for
+            # anything deployed, but a test suite that silently requires a
+            # container is a test suite that stops running the moment Docker is
+            # not up - and the failure looks like a code regression rather than
+            # a missing service, which costs far more than it sounds like.
+            "nonce_cache_backend": "memory",
         }
     )
 
@@ -112,11 +119,17 @@ async def app(session: AsyncSession, test_settings: Settings) -> AsyncIterator[F
     request writes is rolled back with the test and never touches the
     development database.
     """
+    from app.infrastructure.cache import reset_nonce_cache
     from app.infrastructure.db.session import get_session
     from app.infrastructure.storage import reset_storage
     from app.main import create_app
 
     reset_storage()
+    # Both are process-wide singletons built on first use. Without this reset a
+    # cache constructed from *another* test's settings would be reused, and a
+    # nonce claimed in one test would make the next one's identical nonce look
+    # like a replay.
+    reset_nonce_cache()
     application = create_app(test_settings)
     # The limiter is a module-level singleton built from the *global* settings
     # at import time, so `rate_limit_enabled=False` in test settings cannot

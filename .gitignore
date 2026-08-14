@@ -84,9 +84,11 @@ models/**
 !models/**/.gitkeep
 
 # Training runs, evaluation figures, generated reports.
-outputs/**
-!outputs/.gitkeep
-!outputs/**/.gitkeep
+# Unanchored (no leading slash) so this also catches ai/outputs/ and
+# backend/outputs/ — a pattern containing a slash is anchored to this file's
+# directory, so plain `outputs/**` would only ever have matched the repo root.
+**/outputs/
+!**/outputs/.gitkeep
 
 # --- Dataset ---------------------------------------------------------------
 # Raw and processed images stay out of git (size + licensing).
