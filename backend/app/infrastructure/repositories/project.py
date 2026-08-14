@@ -232,6 +232,27 @@ class SqlAlchemyProjectRepository:
         rows = (await self._session.execute(stmt)).scalars().all()
         return tuple(to_project(row) for row in rows)
 
+    async def list_for_maintenance(self, *, limit: int = 500) -> tuple[Project, ...]:
+        """Live projects, for the scheduled status and remark jobs.
+
+        Archived projects are excluded in **SQL** rather than filtered out in
+        Python: they are a growing share of the table over a system's life, and
+        they are precisely the rows the maintenance jobs have nothing to say
+        about.
+
+        Bounded on purpose. A beat job that silently starts taking minutes as
+        the table grows is a worse failure than one that visibly handles the
+        oldest 500 — and at this system's scale the cap is never reached.
+        """
+        stmt = (
+            select(models.ProjectModel)
+            .where(models.ProjectModel.status != ProjectStatus.ARCHIVED)
+            .order_by(models.ProjectModel.created_at)
+            .limit(limit)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return tuple(to_project(row) for row in rows)
+
     # -- writes --------------------------------------------------------------
 
     async def add(self, project: Project) -> Project:

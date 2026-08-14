@@ -2,8 +2,8 @@
 title: Module 10 — Reports, Status & Remarks
 type: module
 module: 10
-status: in-progress
-updated: 2026-08-14
+status: done
+updated: 2026-08-15
 ---
 
 # Module 10 — Reports (PDF/CSV), Status Derivation & Automatic Remarks
@@ -97,8 +97,8 @@ project folder — one of the strongest demo artifacts in the defense.
 - [x] Weekly / monthly / custom PDF and CSV, generated asynchronously
 - [x] Charts embedded; disclaimer present
 - [x] Permission re-checked at download; signed URLs expire
-- [ ] Status derivation + automatic remarks running on schedule, deduplicated
-- [ ] Device offline sweep and notifications working
+- [x] Status derivation + automatic remarks running on schedule, deduplicated
+- [x] Device offline sweep and notifications working
 
 ## Delivered — the reports half (2026-08-14)
 
@@ -135,12 +135,41 @@ Three choices worth defending:
   one of the more useful things a report can say, and it is exactly when an owner wants a
   document to show somebody.
 
-## Still to build — the maintenance half
+## Delivered — the maintenance half (2026-08-15)
 
-`infrastructure/tasks/maintenance.py` and the beat schedule: `projects.refresh_status` (6 h),
-`devices.sweep_offline` (30 min), `remarks.emit_system` (6 h), `reports.cleanup_expired`
-(daily), plus remark deduplication and the offline-device notification. Testing procedure
-items 6-9 in this note cover them and are not yet met.
+`app/worker/maintenance.py`, on Celery **beat**, all four jobs idempotent and safe to run
+twice — a beat schedule redelivers after a restart, and a maintenance job that double-posts is
+worse than one that occasionally skips.
+
+| Task | Cadence | What it does |
+|---|---|---|
+| `projects.refresh_status` | 6 h | recompute derived status, **write only when it moves** |
+| `remarks.emit_system` | 6 h | write due remarks, deduplicated over 72 h |
+| `devices.sweep_offline` | 30 min | mark silent cameras offline; alert a wholly dark site |
+| `reports.cleanup_expired` | daily | delete report files past `GV_REPORT_RETENTION_DAYS` (90) |
+
+`app/domain/services/remarks.py` holds the message table from
+[[Project-Status-Rules]] as a **pure function** of a project's signals — 15 unit tests pin the
+wording and every threshold, with no database. Deduplication is deliberately *not* in there:
+the rules say what is true now, and the job decides whether it has already been said. Mixing
+them would make a rule untestable without a database, and 72 hours is a delivery concern
+rather than a fact about the project.
+
+Four behaviours worth stating:
+
+- **Status is written only when it changes.** The column exists to keep project *lists*
+  cheap; rewriting every row every six hours would churn the table and its indexes for no
+  reader's benefit. A test asserts `updated_at` is untouched for a healthy project.
+- **Archived and approved projects are never nagged.** Both were settled deliberately;
+  telling their owner they are behind schedule is noise about a decision already made.
+- **One live camera keeps a site reporting.** The offline *device* threshold is 6 h; the
+  *whole-site* alert is 48 h and fires only when every paired camera is silent. Waking an
+  owner because one camera missed a capture teaches them to ignore the alerts that matter.
+- **Report cleanup deletes the file first.** If object storage is unreachable the row is left
+  alone so the next run retries — deleting it would orphan the blob permanently, because
+  nothing else records that key.
+
+Run it with `.\dev.ps1 beat` alongside `.\dev.ps1 worker`; beat only publishes.
 
 ## Related
 [[Project-Status-Rules]] · [[Progress-Calculation]] · [[API-Contract]] · [[Module-12-Owner-Dashboard]]

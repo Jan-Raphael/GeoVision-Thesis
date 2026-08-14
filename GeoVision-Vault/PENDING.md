@@ -43,10 +43,8 @@ updated: 2026-08-14
 **Nothing is blocking code right now.** Modules 01–06 and **09** are done, and the whole
 stack has been exercised end to end against live services.
 
-**Build next: the maintenance half of [[Module-10-Reports-and-Remarks]], or
-[[Module-11-Public-Dashboard]].** Module 10's *reports* half is done (PDF, CSV, generation
-task, endpoints); what remains there is the beat schedule — status refresh, automatic
-remarks, offline sweep. Module 11 is fully unblocked. Module 09 was built ahead of 07/08 against a deterministic `StubClassifier`, which
+**Build next: [[Module-11-Public-Dashboard]].** Modules 01-06 and 09-10 are done; 11 is
+fully unblocked and is now the largest remaining chunk. After it: 14 (realtime), then 12. Module 09 was built ahead of 07/08 against a deterministic `StubClassifier`, which
 means **the dataset no longer blocks the code** — 07 and 08 became a weights swap behind the
 `StageClassifier` protocol rather than an integration. Four to five modules of work are
 available without a single labelled image (10 → 11 → 14 → 12).
@@ -132,7 +130,7 @@ Authoritative board: [[Build-Order]].
 | 07 | Classifier Training | ⏸ blocked | **P1-3, P1-4** (dataset). Now a weights swap, not an integration. |
 | 08 | YOLO Detection | ⏸ blocked | P1-3, P1-4 |
 | 09 | Inference & Progress | ✅ done | — *built early against a `StubClassifier`, which unblocked 10–14* |
-| 10 | Reports & Remarks | ◑ reports done | — *maintenance/beat half remains* |
+| 10 | Reports & Remarks | ✅ done | — |
 | 11 | Public Dashboard | **▶ next** | — |
 | 12 | Owner Dashboard | pending | 11, 10, 14 + **Q12** |
 | 13 | Firmware | pending | **P1-1** (hardware) |

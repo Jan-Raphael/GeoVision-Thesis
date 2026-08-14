@@ -66,6 +66,7 @@ switch ($Task.ToLower()) {
             @('api', 'Run the FastAPI dev server'),
             @('dashboard', 'Run the Vite dev server'),
             @('worker', 'Run the Celery worker (solo pool on Windows)'),
+            @('beat', 'Run the Celery beat scheduler (Module 10 jobs)'),
             @('lint', 'ruff check (backend + ai)'),
             @('fmt', 'ruff format (backend + ai)'),
             @('typecheck', 'mypy + tsc'),
@@ -139,6 +140,12 @@ switch ($Task.ToLower()) {
         Write-Step 'Starting Celery worker (solo pool - Windows)'
         Invoke-In 'backend' 'uv' @('run', 'celery', '-A', 'app.worker.celery_app',
             'worker', '-Q', 'ingest,inference,interactive,reports', '-l', 'info', '--pool=solo')
+    }
+
+    'beat' {
+        # The scheduler only publishes; a worker must be running to do the work.
+        Write-Step 'Starting Celery beat (status refresh, remarks, offline sweep, cleanup)'
+        Invoke-In 'backend' 'uv' @('run', 'celery', '-A', 'app.worker.celery_app', 'beat', '-l', 'info')
     }
 
     'lint' {

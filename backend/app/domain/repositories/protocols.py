@@ -210,6 +210,10 @@ class ProjectRepository(Protocol):
         """Fuzzy search public projects by name or location."""
         ...
 
+    async def list_for_maintenance(self, *, limit: int = 500) -> tuple[Project, ...]:
+        """Live (non-archived) projects, for the scheduled status/remark jobs."""
+        ...
+
     async def add(self, project: Project) -> Project:
         """Create a project."""
         ...
@@ -562,6 +566,14 @@ class ReportRepository(Protocol):
 
     async def add(self, report: Report) -> Report:
         """Queue a report."""
+        ...
+
+    async def list_expired(self, before: datetime, *, limit: int = 200) -> tuple[Report, ...]:
+        """Ready reports completed before *before* — the daily cleanup's input."""
+        ...
+
+    async def delete(self, report_id: UUID) -> bool:
+        """Remove a report row; the caller deletes its stored file first."""
         ...
 
     async def update(self, report: Report) -> Report:

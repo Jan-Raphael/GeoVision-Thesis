@@ -16,7 +16,7 @@ from app.domain.entities import (
     Remark,
     Report,
 )
-from app.domain.enums import ModelKind
+from app.domain.enums import ModelKind, ReportStatus
 from app.infrastructure.db import models
 from app.infrastructure.repositories._result import affected_rows
 from app.infrastructure.repositories.mappers import (
@@ -221,6 +221,36 @@ class SqlAlchemyReportRepository:
         await self._session.flush()
         await self._session.refresh(row)
         return to_report(row)
+
+    async def list_expired(self, before: datetime, *, limit: int = 200) -> tuple[Report, ...]:
+        """Ready reports older than *before* — the daily cleanup's input.
+
+        Returns the rows rather than deleting them, because the file in object
+        storage has to go too and only the caller has a storage client. A row
+        deleted here with its blob left behind is an orphan nobody will ever
+        find again.
+        """
+        stmt = (
+            select(models.ReportModel)
+            .where(
+                models.ReportModel.status == ReportStatus.READY,
+                models.ReportModel.completed_at.is_not(None),
+                models.ReportModel.completed_at < before,
+            )
+            .order_by(models.ReportModel.completed_at)
+            .limit(limit)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return tuple(to_report(row) for row in rows)
+
+    async def delete(self, report_id: UUID) -> bool:
+        """Remove a report row. The caller deletes its stored file first."""
+        row = await self._session.get(models.ReportModel, report_id)
+        if row is None:
+            return False
+        await self._session.delete(row)
+        await self._session.flush()
+        return True
 
     async def update(self, report: Report) -> Report:
         """Update job status or attach the finished file."""

@@ -76,7 +76,7 @@ worker: ## Run the Celery worker (Module 09+)
 	cd backend && uv run celery -A app.worker.celery_app worker \
 		-Q ingest,inference,interactive,reports -l info
 
-beat: ## Run the Celery beat scheduler (Module 10+)
+beat: ## Run the Celery beat scheduler (status refresh, remarks, sweep, cleanup)
 	cd backend && uv run celery -A app.worker.celery_app beat -l info
 
 ## ---------------------------------------------------------------------------

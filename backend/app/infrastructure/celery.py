@@ -45,7 +45,7 @@ celery_app = Celery(
     "geovision",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.worker.inference", "app.worker.reports"],
+    include=["app.worker.inference", "app.worker.reports", "app.worker.maintenance"],
 )
 
 celery_app.conf.update(
@@ -78,6 +78,34 @@ celery_app.conf.update(
         "inference.service_status": {"queue": "interactive"},
         # Slow, CPU-bound, and unrelated to scoring images.
         "reports.generate": {"queue": "reports"},
+        # The scheduled jobs share the reports queue: all are slow, periodic,
+        # and nobody is waiting on any of them.
+        "projects.refresh_status": {"queue": "reports"},
+        "remarks.emit_system": {"queue": "reports"},
+        "devices.sweep_offline": {"queue": "reports"},
+        "reports.cleanup_expired": {"queue": "reports"},
+    },
+    # Beat schedule. Cadences come from `Project-Status-Rules.md`; the device
+    # sweep runs far more often than the rest because "the camera stopped" is
+    # the most actionable thing this system can tell an owner, and every hour it
+    # goes unsaid is an hour of lost captures.
+    beat_schedule={
+        "refresh-project-status": {
+            "task": "projects.refresh_status",
+            "schedule": 6 * 60 * 60.0,
+        },
+        "emit-system-remarks": {
+            "task": "remarks.emit_system",
+            "schedule": 6 * 60 * 60.0,
+        },
+        "sweep-offline-devices": {
+            "task": "devices.sweep_offline",
+            "schedule": 30 * 60.0,
+        },
+        "cleanup-expired-reports": {
+            "task": "reports.cleanup_expired",
+            "schedule": 24 * 60 * 60.0,
+        },
     },
     result_expires=3600,
     # Fail fast when the broker is unreachable. The producer is a web request

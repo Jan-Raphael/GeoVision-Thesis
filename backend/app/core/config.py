@@ -175,6 +175,10 @@ class Settings(BaseSettings):
     # a health surface, and a health check that hangs is an outage of its own.
     model_status_timeout_seconds: float = Field(default=3.0, ge=0.5, le=30.0)
     predict_rate_limit: str = "10/minute"
+    # How long a generated report's file is kept. Reports are cheap to
+    # regenerate from stored snapshots, and a PDF nobody downloaded in three
+    # months is storage paid for nothing.
+    report_retention_days: int = Field(default=90, ge=1, le=3650)
 
     # -- Project defaults ---------------------------------------------------
     default_timezone: str = "Asia/Manila"
