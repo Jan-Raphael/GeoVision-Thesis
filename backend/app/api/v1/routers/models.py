@@ -12,11 +12,12 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, InferenceGatewayDep, ModelRepoDep
+from app.api.route import TransactionalRoute
 from app.api.schemas.predictions import ModelListResponse, ModelStatusResponse
 from app.api.v1.presenters_ai import present_model, present_model_status
 from app.application.use_cases.models import GetModelStatus, ListModels
 
-router = APIRouter(tags=["models"])
+router = APIRouter(tags=["models"], route_class=TransactionalRoute)
 
 
 @router.get(

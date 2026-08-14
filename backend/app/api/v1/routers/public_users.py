@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, Response
 
 from app.api.deps import OptionalUser, ProjectRepoDep, UserRepoDep
+from app.api.route import TransactionalRoute
 from app.api.schemas.auth import (
     PublicProfileDetailResponse,
     PublicProfileResponse,
@@ -21,7 +22,7 @@ from app.api.schemas.auth import (
 from app.application.use_cases.users import GetPublicProfile, SearchUsers
 from app.core.rate_limit import get_limiter
 
-router = APIRouter(prefix="/public", tags=["public"])
+router = APIRouter(prefix="/public", tags=["public"], route_class=TransactionalRoute)
 limiter = get_limiter()
 
 

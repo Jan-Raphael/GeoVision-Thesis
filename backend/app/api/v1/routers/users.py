@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import AuditDep, ClientIPDep, CurrentUser, ProjectRepoDep, UserRepoDep
+from app.api.route import TransactionalRoute
 from app.api.schemas.auth import (
     UpdateProfileRequest,
     UserResponse,
@@ -16,7 +17,7 @@ from app.application.use_cases.users import (
 )
 from app.infrastructure.audit import AuditAction
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(prefix="/users", tags=["users"], route_class=TransactionalRoute)
 
 
 @router.get("/me", summary="My profile", response_model=UserResponse)

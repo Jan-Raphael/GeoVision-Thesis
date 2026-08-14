@@ -32,6 +32,7 @@ from app.api.deps import (
     UserAgentDep,
     UserRepoDep,
 )
+from app.api.route import TransactionalRoute
 from app.api.schemas.common import MessageResponse, PageResponse
 from app.api.schemas.projects import (
     ContactRequest,
@@ -48,7 +49,7 @@ from app.domain.enums import ProjectStatus
 from app.domain.services.authorization import AccessContext
 from app.domain.value_objects import DomainValidationError, ProjectCode
 
-router = APIRouter(prefix="/public", tags=["public"])
+router = APIRouter(prefix="/public", tags=["public"], route_class=TransactionalRoute)
 limiter = get_limiter()
 
 

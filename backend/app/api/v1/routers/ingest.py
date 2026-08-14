@@ -27,6 +27,7 @@ from app.api.deps import (
     StorageDep,
     TaskQueueDep,
 )
+from app.api.route import TransactionalRoute
 from app.application.use_cases.devices import RecordDeviceEvent
 from app.application.use_cases.ingest import (
     CaptureMetadata,
@@ -35,7 +36,7 @@ from app.application.use_cases.ingest import (
 )
 from app.core.exceptions import ValidationFailedError
 
-router = APIRouter(prefix="/ingest", tags=["ingest"])
+router = APIRouter(prefix="/ingest", tags=["ingest"], route_class=TransactionalRoute)
 
 
 class IngestResponse(BaseModel):

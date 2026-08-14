@@ -26,6 +26,7 @@ from app.api.deps import (
     TaskQueueDep,
     require_permission,
 )
+from app.api.route import TransactionalRoute
 from app.api.schemas.reports import (
     ReportDownloadResponse,
     ReportListResponse,
@@ -43,7 +44,7 @@ from app.domain.enums import Permission
 from app.domain.services.authorization import AccessContext
 from app.infrastructure.audit import AuditAction
 
-router = APIRouter(tags=["reports"])
+router = APIRouter(tags=["reports"], route_class=TransactionalRoute)
 
 ProjectId = Annotated[UUID, Path(description="Project id")]
 ReportId = Annotated[UUID, Path(description="Report id")]

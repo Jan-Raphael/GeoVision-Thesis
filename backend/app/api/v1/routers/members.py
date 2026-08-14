@@ -19,6 +19,7 @@ from app.api.deps import (
     UserRepoDep,
     require_permission,
 )
+from app.api.route import TransactionalRoute
 from app.api.schemas.common import MessageResponse
 from app.api.schemas.projects import (
     ChangeMemberRoleRequest,
@@ -37,7 +38,7 @@ from app.domain.enums import Permission
 from app.domain.services.authorization import AccessContext
 from app.infrastructure.audit import AuditAction
 
-router = APIRouter(tags=["members"])
+router = APIRouter(tags=["members"], route_class=TransactionalRoute)
 
 ProjectId = Annotated[UUID, Path(description="Project id")]
 MemberId = Annotated[UUID, Path(description="Membership id")]

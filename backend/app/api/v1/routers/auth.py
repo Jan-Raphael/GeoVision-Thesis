@@ -15,6 +15,7 @@ from app.api.deps import (
     UserAgentDep,
     UserRepoDep,
 )
+from app.api.route import TransactionalRoute
 from app.api.schemas.auth import (
     USERNAME_PATTERN,
     LoginRequest,
@@ -35,7 +36,7 @@ from app.application.use_cases.auth import (
 from app.core.rate_limit import get_limiter
 from app.infrastructure.audit import AuditAction
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"], route_class=TransactionalRoute)
 limiter = get_limiter()
 
 

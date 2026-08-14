@@ -20,6 +20,7 @@ from app.api.deps import (
     SettingsDep,
     require_permission,
 )
+from app.api.route import TransactionalRoute
 from app.api.schemas.common import MessageResponse
 from app.api.schemas.projects import DeviceSummaryResponse
 from app.api.v1.presenters import present_device
@@ -36,7 +37,7 @@ from app.domain.services.authorization import AccessContext
 from app.infrastructure.audit import AuditAction
 from app.infrastructure.qr import build_provisioning_qr
 
-router = APIRouter(tags=["devices"])
+router = APIRouter(tags=["devices"], route_class=TransactionalRoute)
 limiter = get_limiter()
 
 ProjectId = Annotated[UUID, Path(description="Project id")]

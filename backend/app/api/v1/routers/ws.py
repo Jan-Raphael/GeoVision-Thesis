@@ -29,6 +29,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 
 from app.api.deps import SessionDep, SettingsDep
+from app.api.route import TransactionalRoute
 from app.application.ports.events import EventType, RealtimeEvent
 from app.core.security import TokenError, TokenType, verify_token
 from app.domain.services.authorization import can_view_project
@@ -44,7 +45,7 @@ __all__ = ["router"]
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["realtime"])
+router = APIRouter(tags=["realtime"], route_class=TransactionalRoute)
 
 #: Frames larger than this are refused. A subscribe list is a few hundred bytes;
 #: anything near this is either a bug or an attempt to exhaust memory.

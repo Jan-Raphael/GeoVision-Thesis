@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -17,6 +18,12 @@ from app.core.config import Settings, get_settings
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+#: Where the request-scoped session is parked for
+#: :class:`~app.api.route.TransactionalRoute` to find. Defined here, in the
+#: inner layer, because infrastructure may not import the API layer — the route
+#: class reads it from this module rather than the other way round.
+SESSION_STATE_KEY = "db_session"
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
@@ -78,23 +85,29 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     return _session_factory
 
 
-async def get_session() -> AsyncIterator[AsyncSession]:
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
     """FastAPI dependency yielding a transactional session.
 
-    Commits on success and rolls back on any exception, so a request either
-    persists all of its changes or none of them. Repositories therefore never
-    call ``commit()`` themselves — transaction scope belongs to the request, not
-    to a single query.
+    Rolls back on any exception, so a request either persists all of its
+    changes or none of them. Repositories never call ``commit()`` themselves —
+    transaction scope belongs to the request, not to a single query.
+
+    **The commit does not happen here** (Q12, ADR-031). This is a ``yield``
+    dependency, and FastAPI runs its exit code *after the response has been
+    delivered* — so committing here published a ``201`` roughly 7 ms before the
+    row was durable, and a client reading its own write got a ``404``. The
+    session is parked on ``request.state`` and
+    :class:`~app.api.route.TransactionalRoute` commits it inside the endpoint's
+    own scope instead, before the first byte goes out.
     """
     factory = get_session_factory()
     async with factory() as session:
+        setattr(request.state, SESSION_STATE_KEY, session)
         try:
             yield session
         except Exception:
             await session.rollback()
             raise
-        else:
-            await session.commit()
 
 
 async def dispose_engine() -> None:

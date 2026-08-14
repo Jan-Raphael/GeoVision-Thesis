@@ -545,6 +545,58 @@ layer whose job is orchestration, and the contract that keeps SQLAlchemy out of 
 for the same reason. (c) Passing primitives (dicts) across the boundary — untyped, and every
 renderer would re-derive the same aggregates by hand.
 
+## ADR-031 - The request transaction commits before the response, not after it
+**Status:** Accepted 2026-08-15 - resolves Q12
+**Context.** `get_session` was a `yield` dependency that committed in its exit code. FastAPI
+runs that exit code from `AsyncExitStackMiddleware`, the **outermost** middleware - so it runs
+*after the response has been delivered*. Measured on the live API: a project row committed
+**6.9 ms after its `201` reached the client**, so a caller that read its own write got a `404`.
+Create-then-navigate is exactly what a dashboard does, which is why this blocked Module 12.
+The suite was blind to it, and the reason matters: `httpx.ASGITransport` awaits the entire ASGI
+call - teardown included - before returning a response, so tests *always* observe the committed
+state. Only a real network client could see the gap.
+**Decision.** A `TransactionalRoute(APIRoute)` subclass wraps each generated handler and commits
+the request's session after the handler returns but **before** Starlette sends the response.
+`get_session` parks the session on `request.state` and no longer commits; it still rolls back on
+exception, so the all-or-nothing guarantee is unchanged - only the *timing* of the success path
+moved. Every router that touches the database sets `route_class=TransactionalRoute`; `health`
+does not, because it has no session and should not pay for one.
+**Consequences.** A write is durable before the client is told it succeeded, which is what every
+caller already assumed. `session.in_transaction()` guards the commit, so a read-only endpoint
+issues no pointless `COMMIT` - the public feed is the hottest path in the system. The regression
+test drives the ASGI app **directly**, recording the order of the commit against the
+`http.response.start` message, because that ordering is the entire property and no HTTP client
+can observe it. A second test fails the build if a router is added without the route class,
+since forgetting it reintroduces the defect silently. Cost: one more thing to remember when
+adding a router - hence that test.
+**Rejected.** (a) Committing inside each handler - invasive, easy to forget, and it puts
+transaction scope back into business logic the repositories were designed to keep it out of.
+(b) Middleware - it runs outside the dependency's exit stack, so the session is already gone by
+the time it could act. (c) Living with it and having clients retry - that pushes a server defect
+into every consumer, and Module 12 has several.
+
+## ADR-032 - Audit rows for refused requests are committed before the refusal
+**Status:** Accepted 2026-08-15
+**Context.** Module 05 states that a device authentication failure is "logged and audited
+server-side", and the generic 401 is deliberately uninformative precisely *because* the detail
+was supposed to live in the audit trail. It did not: `_deny` wrote the row, the dependency then
+raised, and the request rolled back - taking the evidence with it. Verified with a test before
+the fix: three refused uploads produced **zero** rows. The failure mode is the nastiest kind -
+the endpoint behaves exactly as designed, the log line appears, and only the durable, queryable
+record is missing, so nobody notices until they go looking for a brute-force attempt that left
+no trace.
+**Decision.** `_deny` commits the audit row before returning the error. Safe and tightly scoped:
+device authentication is a dependency that runs *before* the handler, so the audit row is the
+only pending write at that moment.
+**Consequences.** Attempt counting - the entire reason for auditing failures - now works, pinned
+by `tests/integration/test_audit_durability.py`. Note the general shape for anything added
+later: **any audit row describing a refusal has to be committed by whatever refuses**, because
+the refusal itself rolls the request back. The `/ws` endpoint already does this for denied
+subscriptions.
+**Rejected.** A separate session or engine for audit writes - correct in principle, and the right
+answer if audit ever needs to survive a *handler* failure too, but it doubles the connection cost
+of the hottest unauthenticated path in the system to solve what one `commit()` solves.
+
 ---
 
 ## Template

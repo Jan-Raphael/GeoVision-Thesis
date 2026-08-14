@@ -31,6 +31,7 @@ from app.api.deps import (
     TaskQueueDep,
     require_permission,
 )
+from app.api.route import TransactionalRoute
 from app.api.schemas.common import PageResponse
 from app.api.schemas.predictions import (
     AdHocPredictionResponse,
@@ -56,7 +57,7 @@ from app.domain.enums import ImageStatus, Permission
 from app.domain.services.authorization import AccessContext
 from app.infrastructure.audit import AuditAction
 
-router = APIRouter(tags=["predictions"])
+router = APIRouter(tags=["predictions"], route_class=TransactionalRoute)
 limiter = get_limiter()
 
 ProjectId = Annotated[UUID, Path(description="Project id")]

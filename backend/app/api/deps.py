@@ -364,6 +364,7 @@ EventPublisherDep = Annotated[EventPublisher, Depends(get_publisher)]
 
 async def get_current_device(
     request: Request,
+    session: SessionDep,
     settings: SettingsDep,
     devices: DeviceRepoDep,
     audit: AuditDep,
@@ -394,6 +395,13 @@ async def get_current_device(
             ip_address=client_ip,
             metadata={"reason": reason, "path": request.url.path},
         )
+        # Committed here, before the raise. Everything after this point unwinds
+        # into a rollback, and the row recording *why* a device was refused
+        # would go with it — leaving the endpoint behaving exactly as designed
+        # while the evidence a brute-force attempt leaves behind quietly did not
+        # exist. Safe to commit: this dependency runs before the handler, so the
+        # audit row is the only pending write.
+        await session.commit()
         return UnauthenticatedError(device_auth.GENERIC_AUTH_FAILURE)
 
     try:

@@ -16,6 +16,7 @@ from app.api.deps import (
     StorageDep,
     require_permission,
 )
+from app.api.route import TransactionalRoute
 from app.api.schemas.common import MessageResponse
 from app.api.schemas.projects import (
     AssetResponse,
@@ -36,7 +37,9 @@ from app.core.exceptions import NotFoundError, PayloadTooLargeError
 from app.domain.enums import AssetKind, Permission
 from app.domain.services.authorization import AccessContext
 
-router = APIRouter(prefix="/projects/{project_id}", tags=["content"])
+router = APIRouter(
+    prefix="/projects/{project_id}", tags=["content"], route_class=TransactionalRoute
+)
 
 ProjectId = Annotated[UUID, Path(description="Project id")]
 AssetId = Annotated[UUID, Path(description="Asset id")]

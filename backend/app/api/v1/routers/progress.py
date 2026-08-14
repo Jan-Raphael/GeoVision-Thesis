@@ -25,6 +25,7 @@ from app.api.deps import (
     TaskQueueDep,
     require_permission,
 )
+from app.api.route import TransactionalRoute
 from app.api.schemas.predictions import (
     ProgressResponse,
     RecomputeAcceptedResponse,
@@ -36,7 +37,7 @@ from app.domain.enums import Permission
 from app.domain.services.authorization import AccessContext
 from app.infrastructure.audit import AuditAction
 
-router = APIRouter(prefix="/projects", tags=["progress"])
+router = APIRouter(prefix="/projects", tags=["progress"], route_class=TransactionalRoute)
 
 ProjectId = Annotated[UUID, Path(description="Project id")]
 
