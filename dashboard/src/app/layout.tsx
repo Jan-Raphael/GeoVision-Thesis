@@ -8,7 +8,10 @@
  */
 
 import { Component, type ReactNode } from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+
+import { useSession } from '@/features/auth/session';
+import { logout } from '@/lib/auth';
 
 import { ErrorState } from '@/components/common';
 
@@ -19,6 +22,8 @@ const NAV = [
 ];
 
 function Header() {
+  const { user, refresh } = useSession();
+  const navigate = useNavigate();
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
@@ -45,12 +50,39 @@ function Header() {
               {item.label}
             </NavLink>
           ))}
-          <Link
-            to="/login"
-            className="ml-1 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
-          >
-            Sign in
-          </Link>
+          {user ? (
+            <>
+              <NavLink
+                to="/me"
+                className={({ isActive }) =>
+                  `rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+                    isActive ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:text-slate-900'
+                  }`
+                }
+              >
+                My projects
+              </NavLink>
+              <button
+                type="button"
+                onClick={() => {
+                  void logout().then(() => {
+                    refresh();
+                    navigate('/');
+                  });
+                }}
+                className="ml-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/login"
+              className="ml-1 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            >
+              Sign in
+            </Link>
+          )}
         </nav>
       </div>
     </header>

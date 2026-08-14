@@ -2,7 +2,7 @@
 title: Module 12 — Owner Dashboard
 type: module
 module: 12
-status: in-progress
+status: done
 updated: 2026-08-15
 ---
 
@@ -155,10 +155,39 @@ Three things worth defending:
   inspection notes, and says it is recorded against a name (ADR-007). The ring reads "AI
   estimate" until that has happened.
 
-## Not built yet
+## Completed - the rest (2026-08-15)
 
-`/projects/:id/devices` and `/members` as standalone pages (the folder shows both read-only),
-`/invitations`, `/notifications`, profile editing and the public/private toggle, asset upload,
-the report format/kind modal (the folder requests a weekly PDF directly), and the image
-lightbox with detection overlays. The Playwright owner journey belongs to
-[[Module-15-Testing-and-Evaluation]].
+| Route / piece | |
+|---|---|
+| `/projects/:id/devices` | per-camera weight, unpair with confirmation, liveness |
+| `/projects/:id/members` | invite by username or email, change role, remove |
+| `/invitations` | accept / decline |
+| `/me/edit` | profile fields and the public/private toggle |
+| capture lightbox | photograph, stage, confidence, top-5 probabilities, **detection overlay** |
+| report modal | period and format, replacing the fixed weekly PDF |
+| asset panel | blueprint / render upload, with the ADR-010 scope note on the panel itself |
+| header | signed-in navigation and sign-out |
+
+**48 frontend tests.** Landing page still **78.7 kB gzipped** - every owner screen is a
+separate chunk.
+
+Two details worth keeping:
+
+- **The detection overlay uses percentages**, because boxes are stored normalised. The same
+  numbers land correctly on a 224 px thumbnail and a 1600 px original; pixels would be right
+  on exactly one rendering and silently wrong everywhere else. A test pins the resolution
+  independence.
+- **`CaptureStrip` takes an optional `onSelect`.** The public page passes none and stays a
+  plain strip; the owner folder passes one and each capture opens the lightbox. Passing the
+  capability rather than branching on a `mode` flag means the public surface is *incapable*
+  of opening a view it should not have.
+
+## Not built - and why
+
+**`/notifications`** (Q14). The endpoints do not exist: the contract lists them and rows are
+already being written by Modules 09 and 10, but no route serves them. Building a page against
+a missing endpoint would have been worse than leaving it out. Two endpoints and a header bell.
+
+The **map picker** on the create form is plain latitude/longitude inputs; MapLibre is still
+uninstalled for the reasons in [[Module-11-Public-Dashboard]]. The Playwright owner journey
+belongs to [[Module-15-Testing-and-Evaluation]], which owns browser testing.

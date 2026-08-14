@@ -30,6 +30,14 @@ export function MePage() {
         <p className="mt-2 text-xs text-slate-500">
           Profile is {user?.profile_visibility === 'public' ? 'public' : 'private'}.
         </p>
+        <div className="mt-3 flex gap-3 text-sm">
+          <Link to="/me/edit" className="font-medium text-sky-700 hover:underline">
+            Edit profile
+          </Link>
+          <Link to="/invitations" className="font-medium text-sky-700 hover:underline">
+            Invitations
+          </Link>
+        </div>
       </header>
 
       <div className="flex items-center justify-between">

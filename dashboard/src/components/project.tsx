@@ -60,8 +60,21 @@ export function ProjectCard({ project }: { project: FeedProject }) {
   );
 }
 
-/** Recent captures, each with its geotag and timestamp. */
-export function CaptureStrip({ captures }: { captures: CaptureSummary[] }) {
+/**
+ * Recent captures, each with its geotag and timestamp.
+ *
+ * `onSelect` is optional: the public project page shows captures as a plain
+ * strip, while the owner's folder makes each one open the lightbox. Passing the
+ * handler rather than branching on a `mode` flag keeps the public surface
+ * incapable of opening a view it should not have.
+ */
+export function CaptureStrip({
+  captures,
+  onSelect,
+}: {
+  captures: CaptureSummary[];
+  onSelect?: (imageId: string) => void;
+}) {
   if (captures.length === 0) {
     return (
       <EmptyState
@@ -78,7 +91,10 @@ export function CaptureStrip({ captures }: { captures: CaptureSummary[] }) {
           key={capture.id}
           className="overflow-hidden rounded-lg border border-slate-200 bg-white"
         >
-          <div className="aspect-[4/3] w-full bg-slate-100">
+          <div
+            className={`aspect-[4/3] w-full bg-slate-100 ${onSelect ? 'cursor-zoom-in' : ''}`}
+            onClick={onSelect ? () => { onSelect(capture.id); } : undefined}
+          >
             {capture.thumb_url ? (
               <img
                 src={capture.thumb_url}

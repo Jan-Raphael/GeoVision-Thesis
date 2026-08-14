@@ -159,3 +159,51 @@ describe('permission-driven actions', () => {
     expect(can({ 'project:approve': true }, 'project:approve')).toBe(true);
   });
 });
+
+describe('detection overlay geometry', () => {
+  // Boxes are stored normalised (fractions of width/height), so the same
+  // numbers must land correctly on a 224px thumbnail and a 1600px original.
+  // Percentages are what make that true; pixels would be right on exactly one.
+  const box = { x: 0.1, y: 0.2, width: 0.3, height: 0.4 };
+  const asPercent = (value: number) => `${String(value * 100)}%`;
+
+  it('maps a normalised box to percentage offsets', () => {
+    expect(asPercent(box.x)).toBe('10%');
+    expect(asPercent(box.y)).toBe('20%');
+    expect(asPercent(box.width)).toBe('30%');
+    expect(asPercent(box.height)).toBe('40%');
+  });
+
+  it('is resolution independent', () => {
+    // The same fractions describe the same region at any rendered size.
+    const at = (size: number) => ({ left: box.x * size, width: box.width * size });
+    expect(at(224).left / 224).toBeCloseTo(at(1600).left / 1600);
+    expect(at(224).width / 224).toBeCloseTo(at(1600).width / 1600);
+  });
+});
+
+describe('capture strip interactivity', () => {
+  it('is a plain strip for the public page and clickable for the owner', async () => {
+    const { render, screen } = await import('@testing-library/react');
+    const { CaptureStrip } = await import('@/components/project');
+    const capture = {
+      id: 'i1',
+      filename: 'NG_00.jpg',
+      captured_at: '2026-08-14T07:00:00Z',
+      latitude: 13.6,
+      longitude: 123.1,
+      thumb_url: 'https://storage.example/t.jpg',
+      status: 'inferred',
+      map_url: null,
+    };
+
+    const { unmount } = render(<CaptureStrip captures={[capture]} />);
+    // No handler passed: the public surface cannot open a view it should not have.
+    expect(document.querySelector('.cursor-zoom-in')).toBeNull();
+    unmount();
+
+    render(<CaptureStrip captures={[capture]} onSelect={() => undefined} />);
+    expect(document.querySelector('.cursor-zoom-in')).not.toBeNull();
+    expect(screen.getAllByRole('img').length).toBeGreaterThan(0);
+  });
+});

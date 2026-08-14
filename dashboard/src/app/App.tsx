@@ -46,6 +46,18 @@ const CreateProjectPage = lazy(() =>
 const ManageProjectPage = lazy(() =>
   import('@/pages/manage').then((module) => ({ default: module.ManageProjectPage })),
 );
+const DevicesPage = lazy(() =>
+  import('@/pages/owner-pages').then((module) => ({ default: module.DevicesPage })),
+);
+const MembersPage = lazy(() =>
+  import('@/pages/owner-pages').then((module) => ({ default: module.MembersPage })),
+);
+const InvitationsPage = lazy(() =>
+  import('@/pages/owner-pages').then((module) => ({ default: module.InvitationsPage })),
+);
+const ProfileEditPage = lazy(() =>
+  import('@/pages/owner-pages').then((module) => ({ default: module.ProfileEditPage })),
+);
 
 function Deferred({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<SkeletonGrid count={1} />}>{children}</Suspense>;
@@ -99,6 +111,16 @@ export function PublicRoutes() {
             path="projects/:projectId/manage"
             element={<Deferred><ManageProjectPage /></Deferred>}
           />
+          <Route
+            path="projects/:projectId/devices"
+            element={<Deferred><DevicesPage /></Deferred>}
+          />
+          <Route
+            path="projects/:projectId/members"
+            element={<Deferred><MembersPage /></Deferred>}
+          />
+          <Route path="invitations" element={<Deferred><InvitationsPage /></Deferred>} />
+          <Route path="me/edit" element={<Deferred><ProfileEditPage /></Deferred>} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>

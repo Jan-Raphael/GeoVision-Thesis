@@ -224,3 +224,169 @@ export function useRequestReport(projectId: string) {
     onSuccess: () => cache.invalidateQueries({ queryKey: ownerKeys.folder(projectId) }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Members, invitations, devices, assets, profile
+// ---------------------------------------------------------------------------
+
+export interface Invitation {
+  id: string;
+  project_id: string;
+  project_name?: string;
+  project_code?: string;
+  membership_role: string;
+  membership_status: string;
+  invited_at: string | null;
+}
+
+export const inviteKeys = {
+  invitations: () => ['owner', 'invitations'] as const,
+  assets: (id: string) => ['owner', 'assets', id] as const,
+};
+
+export function useInvitations(): UseQueryResult<Invitation[]> {
+  return useQuery({
+    queryKey: inviteKeys.invitations(),
+    queryFn: () => authed<Invitation[]>('/invitations'),
+  });
+}
+
+/** Accept or decline. One mutation, because they are the same decision. */
+export function useRespondToInvitation() {
+  const cache = useQueryClient();
+  return useMutation({
+    mutationFn: ({ memberId, accept }: { memberId: string; accept: boolean }) =>
+      authed(`/invitations/${memberId}`, { method: 'POST', body: { accept } }),
+    onSuccess: () => {
+      void cache.invalidateQueries({ queryKey: inviteKeys.invitations() });
+      void cache.invalidateQueries({ queryKey: ownerKeys.myProjects() });
+    },
+  });
+}
+
+export function useInviteMember(projectId: string) {
+  const cache = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { identifier: string; membership_role: string }) =>
+      authed(`/projects/${projectId}/members`, { method: 'POST', body: input }),
+    onSuccess: () => cache.invalidateQueries({ queryKey: ownerKeys.folder(projectId) }),
+  });
+}
+
+export function useChangeMemberRole(projectId: string) {
+  const cache = useQueryClient();
+  return useMutation({
+    mutationFn: ({ memberId, role }: { memberId: string; role: string }) =>
+      authed(`/projects/${projectId}/members/${memberId}`, {
+        method: 'PATCH',
+        body: { membership_role: role },
+      }),
+    onSuccess: () => cache.invalidateQueries({ queryKey: ownerKeys.folder(projectId) }),
+  });
+}
+
+export function useRemoveMember(projectId: string) {
+  const cache = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: string) =>
+      authed(`/projects/${projectId}/members/${memberId}`, { method: 'DELETE' }),
+    onSuccess: () => cache.invalidateQueries({ queryKey: ownerKeys.folder(projectId) }),
+  });
+}
+
+export function useUpdateDevice(projectId: string) {
+  const cache = useQueryClient();
+  return useMutation({
+    mutationFn: ({ deviceId, settings }: { deviceId: string; settings: Record<string, unknown> }) =>
+      authed(`/projects/${projectId}/devices/${deviceId}`, { method: 'PATCH', body: settings }),
+    onSuccess: () => cache.invalidateQueries({ queryKey: ownerKeys.folder(projectId) }),
+  });
+}
+
+/**
+ * Unpair revokes the camera's secret. Its **images are kept** — they are the
+ * project's evidence, and losing them because a camera was swapped would be a
+ * far worse outcome than an orphaned device row.
+ */
+export function useUnpairDevice(projectId: string) {
+  const cache = useQueryClient();
+  return useMutation({
+    mutationFn: (deviceId: string) =>
+      authed(`/projects/${projectId}/devices/${deviceId}/unpair`, { method: 'POST' }),
+    onSuccess: () => cache.invalidateQueries({ queryKey: ownerKeys.folder(projectId) }),
+  });
+}
+
+export function useUploadAsset(projectId: string) {
+  const cache = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, kind, notes }: { file: File; kind: string; notes: string }) => {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('kind', kind);
+      if (notes) form.append('notes', notes);
+      return authed<Asset>(`/projects/${projectId}/assets`, { method: 'POST', form });
+    },
+    onSuccess: () => cache.invalidateQueries({ queryKey: ownerKeys.folder(projectId) }),
+  });
+}
+
+export interface ProfileUpdate {
+  full_name?: string;
+  company?: string;
+  bio?: string;
+  professional_role?: string;
+}
+
+export function useUpdateProfile() {
+  return useMutation({
+    mutationFn: (input: ProfileUpdate) => authed('/users/me', { method: 'PATCH', body: input }),
+  });
+}
+
+export function useSetProfileVisibility() {
+  return useMutation({
+    mutationFn: (visibility: 'public' | 'private') =>
+      authed('/users/me/visibility', {
+        method: 'PATCH',
+        body: { profile_visibility: visibility },
+      }),
+  });
+}
+
+/** One capture with its prediction and detection boxes, for the lightbox. */
+export interface ImageDetail {
+  id: string;
+  filename: string;
+  captured_at: string;
+  status: string;
+  latitude: number | null;
+  longitude: number | null;
+  original_url: string | null;
+  thumb_url: string | null;
+  map_url: string | null;
+  rejected_reason: string | null;
+  counts: Record<string, number>;
+  prediction: {
+    stage: string;
+    confidence: number;
+    macro_stage: string;
+    raw_progress_pct: number;
+    is_eligible: boolean;
+    low_confidence: boolean;
+    class_probabilities: Record<string, number>;
+  } | null;
+  detections: {
+    class_name: string;
+    confidence: number;
+    bbox: { x: number; y: number; width: number; height: number };
+  }[];
+}
+
+export function useImageDetail(projectId: string, imageId: string | null) {
+  return useQuery({
+    queryKey: ['owner', 'image', projectId, imageId] as const,
+    queryFn: () => authed<ImageDetail>(`/projects/${projectId}/images/${imageId ?? ''}`),
+    enabled: Boolean(imageId),
+  });
+}

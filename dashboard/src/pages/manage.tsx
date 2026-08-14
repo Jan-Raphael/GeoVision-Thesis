@@ -16,7 +16,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
 import {
   Coordinates,
@@ -29,8 +29,9 @@ import { MacroStageLabel, ProgressRing, StageBars, StatusBadge } from '@/compone
 import { CaptureStrip } from '@/components/project';
 import { TimelineChart } from '@/components/timeline-chart';
 import { PairingModal } from '@/features/devices/PairingModal';
+import { AssetPanel, CaptureLightbox, ReportModal } from '@/features/project/extras';
 import { useRealtime } from '@/features/realtime/useRealtime';
-import { useApproveProject, useCreateRemark, useFolder, useRequestReport } from '@/lib/owner';
+import { useApproveProject, useCreateRemark, useFolder } from '@/lib/owner';
 import type { RealtimeEvent } from '@/lib/ws';
 
 function Section({
@@ -131,8 +132,9 @@ export function ManageProjectPage() {
   const [approving, setApproving] = useState(false);
   const [pairedName, setPairedName] = useState<string | null>(null);
   const [remark, setRemark] = useState('');
+  const [reporting, setReporting] = useState(false);
+  const [openCapture, setOpenCapture] = useState<string | null>(null);
   const createRemark = useCreateRemark(projectId);
-  const report = useRequestReport(projectId);
 
   const projectIds = useMemo(() => (projectId ? [projectId] : []), [projectId]);
   useRealtime({
@@ -191,13 +193,10 @@ export function ManageProjectPage() {
           {can('report:generate') && (
             <button
               type="button"
-              disabled={report.isPending}
-              onClick={() => {
-                report.mutate({ kind: 'weekly', report_format: 'pdf' });
-              }}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              onClick={() => { setReporting(true); }}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              {report.isPending ? 'Queuing…' : 'Weekly report'}
+              Report
             </button>
           )}
         </div>
@@ -267,7 +266,18 @@ export function ManageProjectPage() {
           </Section>
 
           <Section title="Recent captures">
-            <CaptureStrip captures={project.recent_images} />
+            <CaptureStrip
+              captures={project.recent_images}
+              onSelect={(id) => { setOpenCapture(id); }}
+            />
+          </Section>
+
+          <Section title="Reference files">
+            <AssetPanel
+              projectId={projectId}
+              assets={project.assets}
+              canUpload={can('asset:upload')}
+            />
           </Section>
 
           <Section title="Remarks">
@@ -322,7 +332,17 @@ export function ManageProjectPage() {
         </div>
 
         <aside className="flex flex-col gap-6">
-          <Section title="Cameras">
+          <Section
+            title="Cameras"
+            action={
+              <Link
+                to={`/projects/${projectId}/devices`}
+                className="text-xs font-medium text-sky-700 hover:underline"
+              >
+                Manage
+              </Link>
+            }
+          >
             {project.devices.length === 0 ? (
               <EmptyState
                 title="No cameras paired"
@@ -356,7 +376,17 @@ export function ManageProjectPage() {
             )}
           </Section>
 
-          <Section title="Collaborators">
+          <Section
+            title="Collaborators"
+            action={
+              <Link
+                to={`/projects/${projectId}/members`}
+                className="text-xs font-medium text-sky-700 hover:underline"
+              >
+                Manage
+              </Link>
+            }
+          >
             <ul className="flex flex-col gap-1.5 text-sm">
               {project.members.map((member) => (
                 <li key={member.id} className="flex justify-between gap-2">
@@ -387,6 +417,16 @@ export function ManageProjectPage() {
             setPairing(false);
             setPairedName(null);
           }}
+        />
+      )}
+      {reporting && (
+        <ReportModal projectId={projectId} onClose={() => { setReporting(false); }} />
+      )}
+      {openCapture && (
+        <CaptureLightbox
+          projectId={projectId}
+          imageId={openCapture}
+          onClose={() => { setOpenCapture(null); }}
         />
       )}
       {approving && (
