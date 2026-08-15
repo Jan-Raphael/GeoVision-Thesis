@@ -626,6 +626,31 @@ only; the failure belongs in the fast unit suite, where it costs 0.2 s.
 
 ---
 
+## ADR-034 - A server enum duplicated in the client is pinned by a cross-boundary test
+**Status:** Accepted 2026-08-15
+**Context.** Registration returned "Request validation failed" for anyone choosing
+**Project manager**. The dashboard's role dropdown was written from memory rather than from
+`ProfessionalRole`: it offered `project_manager`, which the server does not define - the enum
+splits that idea into `manager` and `project_handler` - and omitted `foreman` and `surveyor`
+entirely, so two trades could not describe themselves at all. Six of the seven options happened
+to be right, which is why it looked correct on inspection.
+**Decision.** Where the client must restate a server enum, a test reads **both** and fails on any
+difference in either direction: an option the server would reject, and a value the form does not
+offer. `backend/tests/unit/test_role_options.py` parses the `ROLES` literal out of `auth.tsx` and
+compares it to `ProfessionalRole`; it lives on the backend because the enum is the source of
+truth, and skips cleanly when `dashboard/` is not checked out.
+**Consequences.** Restoring `project_manager` turns all three assertions red, so the guard is
+real. Parsing TypeScript with a regex from Python is admittedly crude and will need updating if
+the literal changes shape - the test says so in its failure message. That cost buys the only
+check that can see a disagreement *between* the two projects: each side's own suite passes
+happily while the boundary is broken, exactly as in [[ADR-Index#ADR-033]].
+**Rejected.** Generating TypeScript types from the OpenAPI schema - the right long-term answer
+and worth doing if a second enum drifts, but it adds a codegen step and a committed artefact to
+solve today what twenty lines pin exactly. Also rejected: fetching the enum at runtime, which
+turns a static list into a network dependency on the one page a signed-out visitor must reach.
+
+---
+
 ## Template
 ```markdown
 ## ADR-NNN — <title>

@@ -13,14 +13,32 @@ import { ErrorState } from '@/components/common';
 import { login, register, type RegisterInput } from '@/lib/auth';
 import { useSession } from '@/features/auth/session';
 
-const ROLES = [
-  'engineer',
-  'architect',
-  'project_manager',
-  'contractor',
-  'home_owner',
-  'student',
-  'other',
+/**
+ * The ten values of the server's `ProfessionalRole` enum, in its order.
+ *
+ * This list is a **copy of a server contract**, so it is written out in full
+ * rather than abbreviated to the roles that seem likely: anything not in
+ * `app/domain/enums.py` is rejected as a validation error at registration, and
+ * anything missing from here is a person who cannot describe themselves
+ * correctly. An earlier version of this file invented `project_manager` — which
+ * the server does not have, splitting that idea into `manager` and
+ * `project_handler` — and silently dropped `foreman` and `surveyor`.
+ * `backend/tests/unit/test_role_options.py` now fails if the two drift again.
+ *
+ * The role is descriptive only. It grants nothing: authorization comes from
+ * membership on a specific project (Roles-and-Permissions).
+ */
+const ROLES: readonly { value: string; label: string }[] = [
+  { value: 'manager', label: 'Manager' },
+  { value: 'project_handler', label: 'Project handler' },
+  { value: 'engineer', label: 'Engineer' },
+  { value: 'architect', label: 'Architect' },
+  { value: 'foreman', label: 'Foreman' },
+  { value: 'contractor', label: 'Contractor' },
+  { value: 'surveyor', label: 'Surveyor' },
+  { value: 'home_owner', label: 'Home owner' },
+  { value: 'student', label: 'Student' },
+  { value: 'other', label: 'Other' },
 ];
 
 function Field({
@@ -178,8 +196,8 @@ export function RegisterPage() {
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           >
             {ROLES.map((role) => (
-              <option key={role} value={role}>
-                {role.replace('_', ' ')}
+              <option key={role.value} value={role.value}>
+                {role.label}
               </option>
             ))}
           </select>

@@ -43,6 +43,10 @@ logger = logging.getLogger(__name__)
 #: Channel pattern every API process listens on.
 PROJECT_CHANNEL_PATTERN = "project:*"
 
+# Reconnection backs off 5s, 10s, 20s… to this ceiling. Bounded so a broker that
+# comes back after an hour is picked up within half a minute, not eventually.
+_MAX_RETRY_DELAY_SECONDS = 30
+
 
 class RedisEventPublisher:
     """Announces events on the project's Redis channel."""
@@ -127,11 +131,16 @@ class RealtimeSubscriber:
         """
         from redis.asyncio import Redis
 
+        failures = 0
+
         while True:
             try:
                 self._client = Redis.from_url(self._url, decode_responses=True)
                 pubsub = self._client.pubsub()
                 await pubsub.psubscribe(PROJECT_CHANNEL_PATTERN)
+                if failures:
+                    logger.info("realtime subscriber reconnected after %d attempts", failures)
+                failures = 0
                 logger.info("realtime subscriber listening on %s", PROJECT_CHANNEL_PATTERN)
 
                 async for message in pubsub.listen():
@@ -140,9 +149,25 @@ class RealtimeSubscriber:
                     await self._dispatch(message.get("data"))
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.warning("realtime subscriber lost Redis; retrying in 5s", exc_info=True)
-                await asyncio.sleep(5)
+            except Exception as exc:
+                failures += 1
+                # The traceback once, then one line per attempt. A developer
+                # running without Redis is the normal case, not an incident, and
+                # a stack trace every five seconds buries the log they are
+                # actually reading — which is how a real error would get missed.
+                delay = min(5 * 2 ** (failures - 1), _MAX_RETRY_DELAY_SECONDS)
+                if failures == 1:
+                    logger.warning(
+                        "realtime subscriber lost Redis; retrying in %ds", delay, exc_info=True
+                    )
+                else:
+                    logger.warning(
+                        "realtime subscriber still unreachable (attempt %d): %s; retrying in %ds",
+                        failures,
+                        exc,
+                        delay,
+                    )
+                await asyncio.sleep(delay)
 
     async def _dispatch(self, raw: object) -> None:
         """Turn one Redis payload into a local broadcast."""
