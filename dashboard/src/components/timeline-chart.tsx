@@ -56,8 +56,8 @@ export function TimelineChart({ points }: { points: TimelinePoint[] }) {
         <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
           <defs>
             <linearGradient id="gv-progress" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0284c7" stopOpacity={0.28} />
-              <stop offset="100%" stopColor="#0284c7" stopOpacity={0.02} />
+              <stop offset="0%" stopColor="#1f5799" stopOpacity={0.28} />
+              <stop offset="100%" stopColor="#1f5799" stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -82,12 +82,12 @@ export function TimelineChart({ points }: { points: TimelinePoint[] }) {
           <Area
             type="monotone"
             dataKey="displayed_pct"
-            stroke="#0284c7"
+            stroke="#1f5799"
             strokeWidth={2}
             fill="url(#gv-progress)"
             // `connectNulls={false}` is the point: absent windows stay absent.
             connectNulls={false}
-            dot={{ r: 2.5, fill: '#0284c7' }}
+            dot={{ r: 2.5, fill: '#1f5799' }}
           />
         </AreaChart>
       </ResponsiveContainer>

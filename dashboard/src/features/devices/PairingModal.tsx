@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 
 import { ErrorState } from '@/components/common';
+import { Modal } from '@/components/modal';
 import { useIssuePairingToken, type PairingTicket } from '@/lib/owner';
 
 const FACES = [
@@ -63,153 +64,121 @@ export function PairingModal({ projectId, pairedDeviceName, onClose }: PairingMo
     };
   }, [ticket]);
 
-  // Escape closes, as every dialog should.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [onClose]);
-
   const request = () => {
     issue.mutate(face, { onSuccess: setTicket });
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="pairing-title"
-    >
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
-        <div className="flex items-start justify-between gap-4">
-          <h2 id="pairing-title" className="text-lg font-semibold text-slate-900">
-            Pair an ESP32 camera
-          </h2>
+    <Modal title="Pair an ESP32 camera" onClose={onClose} size="lg">
+      {pairedDeviceName ? (
+        <div className="text-center">
+          <p className="text-3xl" aria-hidden="true">
+            ✅
+          </p>
+          <p className="mt-2 font-medium text-slate-900">{pairedDeviceName} paired</p>
+          <p className="mt-1 text-sm text-slate-500">
+            The camera will upload on its capture schedule.
+          </p>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-slate-400 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
-            aria-label="Close"
+            className="mt-5 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
           >
-            ✕
+            Done
           </button>
         </div>
-
-        {pairedDeviceName ? (
-          <div className="mt-6 text-center">
-            <p className="text-3xl" aria-hidden="true">
-              ✅
-            </p>
-            <p className="mt-2 font-medium text-slate-900">{pairedDeviceName} paired</p>
-            <p className="mt-1 text-sm text-slate-500">
-              The camera will upload on its capture schedule.
-            </p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-5 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-            >
-              Done
-            </button>
-          </div>
-        ) : !ticket ? (
-          <div className="mt-5">
-            <fieldset>
-              <legend className="text-sm font-medium text-slate-700">Which face of the site?</legend>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {FACES.map((option) => (
-                  <label
-                    key={option.value}
-                    className={`cursor-pointer rounded-lg border px-3 py-2 text-sm ${
-                      face === option.value
-                        ? 'border-sky-500 bg-sky-50 text-sky-900'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="face"
-                      value={option.value}
-                      checked={face === option.value}
-                      onChange={() => {
-                        setFace(option.value);
-                      }}
-                      className="sr-only"
-                    />
-                    {option.label}
-                    {option.hint && (
-                      <span className="ml-1 text-xs text-slate-500">· {option.hint}</span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            {issue.isError && (
-              <div className="mt-4">
-                <ErrorState title="Could not issue a code" message={issue.error.message} />
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={request}
-              disabled={issue.isPending}
-              className="mt-5 w-full rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
-            >
-              {issue.isPending ? 'Generating…' : 'Generate pairing code'}
-            </button>
-          </div>
-        ) : (
-          <div className="mt-5">
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-5">
-              {ticket.qr_png_base64 && (
-                <img
-                  src={`data:image/png;base64,${ticket.qr_png_base64}`}
-                  alt="Pairing QR code"
-                  className="h-40 w-40"
-                />
-              )}
-              <p className="font-mono text-2xl font-semibold tracking-[0.2em] text-slate-900">
-                {ticket.formatted_code}
-              </p>
-              <Countdown seconds={remaining} />
-              <p className="text-center text-xs text-amber-800">
-                Shown once. If you lose it, generate a new code — this one cannot be recovered.
-              </p>
+      ) : !ticket ? (
+        <div>
+          <fieldset>
+            <legend className="text-sm font-medium text-slate-700">Which face of the site?</legend>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {FACES.map((option) => (
+                <label
+                  key={option.value}
+                  className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition ${
+                    face === option.value
+                      ? 'border-sky-500 bg-sky-50 text-sky-900 ring-1 ring-sky-500'
+                      : 'border-slate-200 hover:border-sky-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="face"
+                    value={option.value}
+                    checked={face === option.value}
+                    onChange={() => {
+                      setFace(option.value);
+                    }}
+                    className="sr-only"
+                  />
+                  {option.label}
+                  {option.hint && (
+                    <span className="ml-1 text-xs text-slate-500">· {option.hint}</span>
+                  )}
+                </label>
+              ))}
             </div>
+          </fieldset>
 
-            <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-slate-600">
-              <li>Power the camera.</li>
-              <li>
-                Join the Wi-Fi network <span className="font-medium">GeoVision-Setup-XXXX</span>.
-              </li>
-              <li>Enter your site Wi-Fi details and the code above.</li>
-            </ol>
+          {issue.isError && (
+            <div className="mt-4">
+              <ErrorState title="Could not issue a code" message={issue.error.message} />
+            </div>
+          )}
 
-            <p className="mt-4 text-center text-sm text-slate-500" aria-live="polite">
-              {remaining > 0
-                ? 'Waiting for the camera to claim this code…'
-                : 'This code has expired.'}
+          <button
+            type="button"
+            onClick={request}
+            disabled={issue.isPending}
+            className="mt-5 w-full rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
+          >
+            {issue.isPending ? 'Generating…' : 'Generate pairing code'}
+          </button>
+        </div>
+      ) : (
+        <div>
+          <div className="blueprint-frame flex flex-col items-center gap-3 rounded-lg border border-sky-200 bg-sky-50/60 p-5">
+            {ticket.qr_png_base64 && (
+              <img
+                src={`data:image/png;base64,${ticket.qr_png_base64}`}
+                alt="Pairing QR code"
+                className="h-40 w-40 rounded border border-white bg-white p-1.5 shadow-sm"
+              />
+            )}
+            <p className="font-mono text-2xl font-semibold tracking-[0.2em] text-slate-900">
+              {ticket.formatted_code}
             </p>
-
-            <button
-              type="button"
-              onClick={() => {
-                setTicket(null);
-              }}
-              className="mt-3 w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Generate a new code
-            </button>
+            <Countdown seconds={remaining} />
+            <p className="text-center text-xs text-amber-800">
+              Shown once. If you lose it, generate a new code — this one cannot be recovered.
+            </p>
           </div>
-        )}
-      </div>
-    </div>
+
+          <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-slate-600">
+            <li>Power the camera.</li>
+            <li>
+              Join the Wi-Fi network <span className="font-medium">GeoVision-Setup-XXXX</span>.
+            </li>
+            <li>Enter your site Wi-Fi details and the code above.</li>
+          </ol>
+
+          <p className="mt-4 text-center text-sm text-slate-500" aria-live="polite">
+            {remaining > 0
+              ? 'Waiting for the camera to claim this code…'
+              : 'This code has expired.'}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => {
+              setTicket(null);
+            }}
+            className="mt-3 w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Generate a new code
+          </button>
+        </div>
+      )}
+    </Modal>
   );
 }

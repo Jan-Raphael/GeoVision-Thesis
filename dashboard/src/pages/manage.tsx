@@ -19,12 +19,14 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import {
+  Card,
   Coordinates,
   EmptyState,
   ErrorState,
   MapLink,
   RelativeTime,
 } from '@/components/common';
+import { Modal } from '@/components/modal';
 import { MacroStageLabel, ProgressRing, StageBars, StatusBadge } from '@/components/progress';
 import { CaptureStrip } from '@/components/project';
 import { TimelineChart } from '@/components/timeline-chart';
@@ -34,6 +36,7 @@ import { useRealtime } from '@/features/realtime/useRealtime';
 import { useApproveProject, useCreateRemark, useFolder } from '@/lib/owner';
 import type { RealtimeEvent } from '@/lib/ws';
 
+/** A workspace panel — the folder-page-specific name for the shared `Card`. */
 function Section({
   title,
   action,
@@ -44,13 +47,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
-        {action}
-      </div>
-      <div className="mt-4">{children}</div>
-    </section>
+    <Card title={title} action={action}>
+      {children}
+    </Card>
   );
 }
 
@@ -65,63 +64,53 @@ function ApproveDialog({
   const approve = useApproveProject(projectId);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="approve-title"
-    >
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
-        <h2 id="approve-title" className="text-lg font-semibold text-slate-900">
-          Mark as inspected and complete
-        </h2>
-        <p className="mt-2 text-sm text-slate-600">
-          This finalises the project at <strong>100%</strong>, and is recorded against your name.
-          It should follow a physical inspection of the site — the model stops at 80% precisely
-          because the last stage is a human judgement.
-        </p>
-        <label className="mt-4 block">
-          <span className="mb-1 block text-sm font-medium text-slate-700">Inspection notes</span>
-          <textarea
-            required
-            rows={4}
-            minLength={10}
-            value={notes}
-            onChange={(event) => {
-              setNotes(event.target.value);
-            }}
-            placeholder="What you inspected, and what you found."
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-          />
-        </label>
+    <Modal title="Mark as inspected and complete" onClose={onClose}>
+      <p className="text-sm text-slate-600">
+        This finalises the project at <strong>100%</strong>, and is recorded against your name.
+        It should follow a physical inspection of the site — the model stops at 80% precisely
+        because the last stage is a human judgement.
+      </p>
+      <label className="mt-4 block">
+        <span className="mb-1 block text-sm font-medium text-slate-700">Inspection notes</span>
+        <textarea
+          required
+          rows={4}
+          minLength={10}
+          value={notes}
+          onChange={(event) => {
+            setNotes(event.target.value);
+          }}
+          placeholder="What you inspected, and what you found."
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+        />
+      </label>
 
-        {approve.isError && (
-          <div className="mt-3">
-            <ErrorState title="Could not approve" message={approve.error.message} />
-          </div>
-        )}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={notes.trim().length < 10 || approve.isPending}
-            onClick={() => {
-              approve.mutate(notes, { onSuccess: onClose });
-            }}
-            className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
-          >
-            {approve.isPending ? 'Recording…' : 'Confirm completion'}
-          </button>
+      {approve.isError && (
+        <div className="mt-3">
+          <ErrorState title="Could not approve" message={approve.error.message} />
         </div>
+      )}
+
+      <div className="mt-5 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={notes.trim().length < 10 || approve.isPending}
+          onClick={() => {
+            approve.mutate(notes, { onSuccess: onClose });
+          }}
+          className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+        >
+          {approve.isPending ? 'Recording…' : 'Confirm completion'}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -153,7 +142,7 @@ export function ManageProjectPage() {
     return (
       <div className="animate-pulse space-y-4" aria-busy="true" aria-label="Loading project">
         <div className="h-8 w-1/2 rounded bg-slate-200" />
-        <div className="h-48 rounded-xl bg-slate-200" />
+        <div className="h-48 rounded-lg bg-slate-200" />
       </div>
     );
   }
@@ -168,11 +157,15 @@ export function ManageProjectPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{project.name}</h1>
           <p className="mt-1 text-slate-600">
-            {project.intended_use ?? 'Construction project'} · {project.project_code}
+            {project.intended_use ?? 'Construction project'}
+            {' · '}
+            <span className="font-mono text-xs uppercase tracking-wider text-sky-700">
+              {project.project_code}
+            </span>
           </p>
           <p className="mt-1 text-sm text-slate-500">{project.location_label}</p>
         </div>

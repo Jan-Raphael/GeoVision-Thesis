@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 
-import { ErrorState } from '@/components/common';
+import { ErrorState, FieldHint } from '@/components/common';
 import { login, register, type RegisterInput } from '@/lib/auth';
 import { useSession } from '@/features/auth/session';
 
@@ -46,12 +46,15 @@ function Field({
   value,
   onChange,
   type = 'text',
+  hint,
   ...rest
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  /** Small, semi-transparent format guidance shown under the input. */
+  hint?: React.ReactNode;
 } & Record<string, unknown>) {
   return (
     <label className="block">
@@ -65,15 +68,26 @@ function Field({
         className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         {...rest}
       />
+      {hint && <FieldHint>{hint}</FieldHint>}
     </label>
   );
 }
 
+/**
+ * The sign-in / registration card.
+ *
+ * Framed like the rest of the app's primary panels (the drafting corner
+ * marks), but standalone on the page rather than inside `PublicLayout`'s
+ * shell padding — the first thing a new visitor sees should read as a single,
+ * deliberate document, not a form loose on the page.
+ */
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mx-auto max-w-md">
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-      <div className="mt-6">{children}</div>
+      <div className="blueprint-frame rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
+        <div className="mt-6">{children}</div>
+      </div>
     </div>
   );
 }
@@ -184,8 +198,26 @@ export function RegisterPage() {
     <Shell title="Create an account">
       <form onSubmit={submit} className="flex flex-col gap-4">
         <Field label="Full name" value={form.full_name} onChange={set('full_name')} required />
-        <Field label="Username" value={form.username} onChange={set('username')} required minLength={3} />
-        <Field label="Email" value={form.email} onChange={set('email')} type="email" required />
+        <Field
+          label="Username"
+          value={form.username}
+          onChange={set('username')}
+          required
+          minLength={3}
+          maxLength={30}
+          pattern="[a-zA-Z0-9_.]{3,30}"
+          autoComplete="username"
+          hint="3–30 characters. Letters, numbers, underscore ( _ ) and dot ( . ) only — no spaces."
+        />
+        <Field
+          label="Email"
+          value={form.email}
+          onChange={set('email')}
+          type="email"
+          required
+          autoComplete="email"
+          hint="Used to sign in and for account recovery. Never shown on your public profile."
+        />
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-700">Professional role</span>
           <select
@@ -201,6 +233,7 @@ export function RegisterPage() {
               </option>
             ))}
           </select>
+          <FieldHint>Descriptive only — it does not grant any permission by itself.</FieldHint>
         </label>
         <Field
           label="Password"
@@ -208,8 +241,10 @@ export function RegisterPage() {
           onChange={set('password')}
           type="password"
           required
-          minLength={12}
+          minLength={8}
+          maxLength={128}
           autoComplete="new-password"
+          hint="At least 8 characters, with at least one letter and one number. Avoid common passwords."
         />
         {error && <ErrorState title="Registration failed" message={error} />}
         <button

@@ -14,6 +14,7 @@ import { EmptyState, ErrorState } from '@/components/common';
 import { StatusBadge } from '@/components/progress';
 import { PrivateAccountNotice } from '@/components/project';
 import { submitContact, type ContactForm, type ProjectStatus } from '@/lib/api';
+import { useDebouncedValue } from '@/lib/hooks';
 import { useProfile, useSearch } from '@/lib/queries';
 
 // ---------------------------------------------------------------------------
@@ -25,7 +26,7 @@ export function ProfilePage() {
   const query = useProfile(username);
 
   if (query.isPending) {
-    return <div className="h-48 animate-pulse rounded-xl bg-slate-200" aria-busy="true" />;
+    return <div className="h-48 animate-pulse rounded-lg bg-slate-200" aria-busy="true" />;
   }
   if (query.isError) {
     return <ErrorState title="Could not load this profile" message={query.error.message} />;
@@ -38,8 +39,8 @@ export function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="rounded-xl border border-slate-200 bg-white p-6">
-        <h1 className="text-2xl font-semibold tracking-tight">
+      <header className="blueprint-frame rounded-lg border border-slate-200 bg-white p-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
           {profile.full_name ?? profile.username}
         </h1>
         <p className="mt-1 text-slate-500">@{profile.username}</p>
@@ -57,18 +58,16 @@ export function ProfilePage() {
         {projects.length === 0 ? (
           <EmptyState title="No public projects" />
         ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="flex flex-col gap-3">
             {projects.map((project) => (
               <li key={project.project_code}>
                 <Link
                   to={`/projects/${project.project_code}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-300"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 transition hover:border-sky-300 hover:shadow-sm"
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-medium text-slate-900">
-                      {project.name}
-                    </span>
-                    <span className="block truncate text-sm text-slate-500">
+                    <span className="block font-medium text-slate-900">{project.name}</span>
+                    <span className="block text-sm text-slate-500">
                       {project.location_label}
                     </span>
                   </span>
@@ -98,7 +97,8 @@ export function SearchPage() {
   const [params, setParams] = useSearchParams();
   const term = params.get('q') ?? '';
   const tab = (params.get('tab') ?? 'projects') as Tab;
-  const query = useSearch(term);
+  const debouncedTerm = useDebouncedValue(term, 300);
+  const query = useSearch(debouncedTerm);
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -181,16 +181,18 @@ export function SearchPage() {
                 (counts.projects === 0 ? (
                   <EmptyState title="No projects match" />
                 ) : (
-                  <ul className="flex flex-col gap-2">
+                  <ul className="flex flex-col gap-3">
                     {query.data.projects.map((project) => (
                       <li key={project.project_code}>
                         <Link
                           to={`/projects/${project.project_code}`}
-                          className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-300"
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 transition hover:border-sky-300 hover:shadow-sm"
                         >
                           <span className="min-w-0">
-                            <span className="block truncate font-medium">{project.name}</span>
-                            <span className="block truncate text-sm text-slate-500">
+                            <span className="block font-medium text-slate-900">
+                              {project.name}
+                            </span>
+                            <span className="block text-sm text-slate-500">
                               {project.location_label}
                             </span>
                           </span>
@@ -205,14 +207,16 @@ export function SearchPage() {
                 (counts.owners === 0 ? (
                   <EmptyState title="No owners match" />
                 ) : (
-                  <ul className="flex flex-col gap-2">
+                  <ul className="flex flex-col gap-3">
                     {query.data.users.map((user) => (
                       <li key={user.username}>
                         <Link
                           to={`/users/${user.username}`}
-                          className="block rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-300"
+                          className="block rounded-lg border border-slate-200 bg-white p-4 transition hover:border-sky-300 hover:shadow-sm"
                         >
-                          <span className="font-medium">{user.full_name ?? user.username}</span>
+                          <span className="font-medium text-slate-900">
+                            {user.full_name ?? user.username}
+                          </span>
                           <span className="ml-2 text-sm text-slate-500">@{user.username}</span>
                           {user.professional_role && (
                             <span className="block text-sm text-slate-500">
@@ -230,17 +234,17 @@ export function SearchPage() {
                 (counts.locations === 0 ? (
                   <EmptyState title="No locations match" />
                 ) : (
-                  <ul className="flex flex-col gap-2">
+                  <ul className="flex flex-col gap-3">
                     {locations.map((location) => (
                       <li
                         key={location.key}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4"
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4"
                       >
                         <span className="min-w-0">
-                          <span className="block truncate font-medium">{location.label}</span>
-                          <span className="block truncate text-sm text-slate-500">
-                            {location.name}
+                          <span className="block font-medium text-slate-900">
+                            {location.label}
                           </span>
+                          <span className="block text-sm text-slate-500">{location.name}</span>
                         </span>
                         <a
                           href={location.mapUrl}

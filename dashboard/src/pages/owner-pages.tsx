@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
-import { EmptyState, ErrorState, RelativeTime } from '@/components/common';
+import { Card, EmptyState, ErrorState, RelativeTime } from '@/components/common';
 import { useSession } from '@/features/auth/session';
 import {
   useChangeMemberRole,
@@ -27,14 +27,8 @@ import {
 
 const ROLES = ['viewer', 'employee', 'collaborator', 'editor', 'engineer', 'manager'];
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
+/** This page's rooms are the shared `Card`, under the local name they were introduced with. */
+const Panel = Card;
 
 function BackToProject({ projectId }: { projectId: string }) {
   return (
@@ -155,7 +149,7 @@ export function DevicesPage() {
   const { projectId = '' } = useParams();
   const folder = useFolder(projectId);
 
-  if (folder.isPending) return <div className="h-48 animate-pulse rounded-xl bg-slate-200" />;
+  if (folder.isPending) return <div className="h-48 animate-pulse rounded-lg bg-slate-200" />;
   if (folder.isError) {
     return <ErrorState title="Could not load devices" message={folder.error.message} />;
   }
@@ -202,7 +196,7 @@ export function MembersPage() {
   const [identifier, setIdentifier] = useState('');
   const [role, setRole] = useState('viewer');
 
-  if (folder.isPending) return <div className="h-48 animate-pulse rounded-xl bg-slate-200" />;
+  if (folder.isPending) return <div className="h-48 animate-pulse rounded-lg bg-slate-200" />;
   if (folder.isError) {
     return <ErrorState title="Could not load collaborators" message={folder.error.message} />;
   }
@@ -330,7 +324,7 @@ export function InvitationsPage() {
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold tracking-tight">Invitations</h1>
 
-      {invitations.isPending && <div className="h-32 animate-pulse rounded-xl bg-slate-200" />}
+      {invitations.isPending && <div className="h-32 animate-pulse rounded-lg bg-slate-200" />}
       {invitations.isError && (
         <ErrorState title="Could not load invitations" message={invitations.error.message} />
       )}

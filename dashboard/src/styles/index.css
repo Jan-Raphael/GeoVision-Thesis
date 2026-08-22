@@ -6,3 +6,76 @@
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/*
+ * The app shell sits on a faint drafting-paper grid rather than flat white —
+ * the one texture cue that reads as "engineering drawing" at a glance,
+ * cheap enough (a repeating CSS gradient, no image request) to leave on
+ * every page without a performance cost.
+ */
+body {
+  background-color: #f7fafc;
+  background-image:
+    linear-gradient(to right, rgb(31 87 153 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(31 87 153 / 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+::selection {
+  background-color: rgb(31 87 153 / 0.22);
+}
+
+@layer components {
+  /*
+   * Drafting corner marks — the small L-shaped registration ticks printed in
+   * the corners of technical drawings. Applied to the handful of surfaces
+   * that should read as "the primary document" (the main card shell, modal
+   * panels, the auth card) — not to every list row, where it would just be
+   * noise.
+   */
+  .blueprint-frame {
+    position: relative;
+  }
+  .blueprint-frame::before,
+  .blueprint-frame::after {
+    content: '';
+    position: absolute;
+    width: 0.85rem;
+    height: 0.85rem;
+    pointer-events: none;
+    border-color: theme('colors.sky.400');
+    opacity: 0.7;
+  }
+  .blueprint-frame::before {
+    top: -1px;
+    left: -1px;
+    border-top: 2px solid;
+    border-left: 2px solid;
+  }
+  .blueprint-frame::after {
+    bottom: -1px;
+    right: -1px;
+    border-bottom: 2px solid;
+    border-right: 2px solid;
+  }
+
+  /* Small, low-emphasis helper text under a form field — a format hint the
+     eye can skip when it isn't needed, and find instantly when it is. */
+  .field-hint {
+    @apply mt-1 text-xs leading-snug text-slate-500/80;
+  }
+}
+
+/*
+ * Long single-column lists (the project feed, capture history) render many
+ * off-screen rows. `content-visibility: auto` lets the browser skip layout
+ * and paint work for rows outside the viewport, which is most of them on a
+ * feed of any real size — a meaningful, free rendering-cost reduction that
+ * needs no JS-side virtualisation. `contain-intrinsic-size` reserves
+ * approximately one row's height so the scrollbar doesn't jump as rows are
+ * measured.
+ */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 132px;
+}

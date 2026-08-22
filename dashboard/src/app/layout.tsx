@@ -26,13 +26,18 @@ function Header() {
   const navigate = useNavigate();
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+      {/* A thin drafting rule under the header — the one place a straight
+          accent line reads as "technical drawing" rather than decoration. */}
+      <div className="h-0.5 bg-gradient-to-r from-sky-600 via-sky-400 to-sky-600/40" />
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link
           to="/"
           className="flex items-baseline gap-2 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
         >
           <span className="text-lg font-semibold tracking-tight text-slate-900">GeoVision</span>
-          <span className="hidden text-xs text-slate-500 sm:inline">Construction monitoring</span>
+          <span className="hidden font-mono text-xs uppercase tracking-wider text-sky-700/70 sm:inline">
+            Construction monitoring
+          </span>
         </Link>
 
         <nav className="flex items-center gap-1" aria-label="Main">
@@ -142,7 +147,10 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, BoundarySt
 
 export function PublicLayout() {
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
+    // No opaque background here: `body` carries the faint blueprint grid
+    // (styles/index.css), and painting a solid colour over it at this level
+    // would hide that texture on every single page.
+    <div className="flex min-h-screen flex-col text-slate-900">
       <Header />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
         <ErrorBoundary>

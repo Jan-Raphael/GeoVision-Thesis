@@ -11,6 +11,7 @@ import { useSearchParams } from 'react-router-dom';
 import { EmptyState, ErrorState, SkeletonGrid } from '@/components/common';
 import { ProjectCard } from '@/components/project';
 import type { MacroStage, ProjectStatus } from '@/lib/api';
+import { useDebouncedValue } from '@/lib/hooks';
 import { useFeed } from '@/lib/queries';
 
 const STATUSES: { value: ProjectStatus | ''; label: string }[] = [
@@ -36,8 +37,13 @@ export function FeedPage() {
   const status = (params.get('status') ?? '') as ProjectStatus | '';
   const stage = (params.get('stage') ?? '') as MacroStage | '';
 
+  // The text input is debounced before it reaches the query key: typing a
+  // six-character search term would otherwise fire six requests, five of
+  // which are discarded before they even return. Status/stage are discrete
+  // `<select>` choices, not per-keystroke input, so they skip the debounce.
+  const debouncedQ = useDebouncedValue(q, 300);
   const feed = useFeed({
-    q: q || undefined,
+    q: debouncedQ || undefined,
     status: status || undefined,
     stage: stage || undefined,
   });
@@ -52,14 +58,16 @@ export function FeedPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Monitored projects</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Monitored projects
+        </h1>
         <p className="mt-1 text-slate-600">
           Construction sites published by their owners, with progress estimated from geotagged
           site photographs.
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white/70 p-3">
         <label className="flex-1 min-w-[14rem]">
           <span className="sr-only">Search projects</span>
           <input
@@ -126,7 +134,7 @@ export function FeedPage() {
       )}
 
       {feed.isSuccess && feed.data.items.length > 0 && (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-col gap-3">
           {feed.data.items.map((project) => (
             <ProjectCard key={project.project_code} project={project} />
           ))}

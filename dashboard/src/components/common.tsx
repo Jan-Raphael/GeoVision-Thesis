@@ -91,6 +91,52 @@ export function MapLink({ url, label = 'Open in Maps' }: { url: string; label?: 
   );
 }
 
+/**
+ * The standard panel shell — a bordered card with a small uppercase title,
+ * used for every self-contained block of the dashboard (a project's stage
+ * breakdown, its device list, a profile's detail panel). Consolidating what
+ * used to be three near-identical local `Section`/`Panel` functions means the
+ * card styling — corner marks, border, header rule — lives in one place.
+ */
+export function Card({
+  title,
+  action,
+  framed = false,
+  children,
+}: {
+  title?: string;
+  action?: React.ReactNode;
+  /** Adds the drafting corner marks — reserve for the page's primary card. */
+  framed?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className={`rounded-lg border border-slate-200 bg-white p-5 ${framed ? 'blueprint-frame' : ''}`}
+    >
+      {title && (
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            {title}
+          </h2>
+          {action}
+        </div>
+      )}
+      <div className={title ? 'mt-4' : ''}>{children}</div>
+    </section>
+  );
+}
+
+/**
+ * Small, semi-transparent format guidance under a form field — e.g. the
+ * username and password rules on the registration form. Deliberately quiet
+ * (`text-slate-500/80`, no border, no icon): it should read as a hint a
+ * confident user can ignore, not a warning.
+ */
+export function FieldHint({ children }: { children: React.ReactNode }) {
+  return <p className="field-hint">{children}</p>;
+}
+
 interface EmptyStateProps {
   title: string;
   description?: string;
@@ -121,25 +167,28 @@ export function ErrorState({ title, message }: { title: string; message?: string
   );
 }
 
-/** Placeholder card, sized to the real one so the layout does not jump. */
+/**
+ * Placeholder row, sized to the real project row so the layout does not
+ * jump once data arrives — matches the single-column list every project
+ * listing now uses (feed, "My projects", search, profile).
+ */
 export function SkeletonCard() {
   return (
-    <div className="animate-pulse rounded-xl border border-slate-200 bg-white p-5">
-      <div className="h-4 w-2/3 rounded bg-slate-200" />
-      <div className="mt-2 h-3 w-1/3 rounded bg-slate-200" />
-      <div className="mt-5 h-20 w-20 rounded-full bg-slate-200" />
-      <div className="mt-5 h-3 w-1/2 rounded bg-slate-200" />
+    <div className="flex animate-pulse items-center gap-5 rounded-lg border border-slate-200 bg-white p-5">
+      <div className="h-16 w-16 shrink-0 rounded-full bg-slate-200" />
+      <div className="min-w-0 flex-1 space-y-2.5">
+        <div className="h-4 w-2/5 rounded bg-slate-200" />
+        <div className="h-3 w-3/5 rounded bg-slate-200" />
+        <div className="h-3 w-1/3 rounded bg-slate-200" />
+      </div>
+      <div className="h-6 w-16 shrink-0 rounded-full bg-slate-200" />
     </div>
   );
 }
 
 export function SkeletonGrid({ count = 6 }: { count?: number }) {
   return (
-    <div
-      className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
-      aria-busy="true"
-      aria-label="Loading projects"
-    >
+    <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading projects">
       {Array.from({ length: count }, (_, index) => (
         <SkeletonCard key={index} />
       ))}

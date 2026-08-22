@@ -10,7 +10,7 @@
 
 import { Link, useParams } from 'react-router-dom';
 
-import { Coordinates, EmptyState, ErrorState, MapLink, RelativeTime } from '@/components/common';
+import { Card, Coordinates, EmptyState, ErrorState, MapLink, RelativeTime } from '@/components/common';
 import { MacroStageLabel, ProgressRing, StageBars, StatusBadge } from '@/components/progress';
 import { CaptureStrip } from '@/components/project';
 import { TimelineChart } from '@/components/timeline-chart';
@@ -23,14 +23,8 @@ const SEVERITY_STYLES: Record<string, string> = {
   critical: 'border-rose-200 bg-rose-50',
 };
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
+/** The public project page's rooms are the shared `Card`. */
+const Section = Card;
 
 export function ProjectPage() {
   const { projectCode = '' } = useParams();
@@ -40,8 +34,8 @@ export function ProjectPage() {
     return (
       <div className="animate-pulse space-y-4" aria-busy="true" aria-label="Loading project">
         <div className="h-8 w-1/2 rounded bg-slate-200" />
-        <div className="h-48 rounded-xl bg-slate-200" />
-        <div className="h-64 rounded-xl bg-slate-200" />
+        <div className="h-48 rounded-lg bg-slate-200" />
+        <div className="h-64 rounded-lg bg-slate-200" />
       </div>
     );
   }
@@ -67,11 +61,15 @@ export function ProjectPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{project.name}</h1>
           <p className="mt-1 text-slate-600">
-            {project.intended_use ?? 'Construction project'} · {project.project_code}
+            {project.intended_use ?? 'Construction project'}
+            {' · '}
+            <span className="font-mono text-xs uppercase tracking-wider text-sky-700">
+              {project.project_code}
+            </span>
           </p>
           <p className="mt-1 text-sm text-slate-500">{project.location_label}</p>
         </div>
