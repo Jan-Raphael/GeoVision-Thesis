@@ -155,9 +155,16 @@ jobs:
         working-directory: ai
         run: uv run ruff check .
 
-      - name: pytest
+      - name: pytest (with coverage, threshold enforced via ai/pyproject.toml)
         working-directory: ai
-        run: uv run pytest
+        run: uv run pytest --cov=ai --cov-report=xml --cov-report=term-missing
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-coverage
+          path: ai/coverage.xml
+          if-no-files-found: ignore
 
   frontend:
     name: Dashboard build

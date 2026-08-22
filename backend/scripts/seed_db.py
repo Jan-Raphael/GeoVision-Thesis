@@ -66,9 +66,12 @@ SEEDED_USER_IDS = (USER_ALICE, USER_BRUNO, USER_CARLA)
 SEEDED_PROJECT_IDS = (PROJECT_JOLLI, PROJECT_DELAYED, PROJECT_DONE, PROJECT_PRIVATE)
 
 #: Argon2 hash of "geovision-dev" - development only, never a real credential.
+#: Was a placeholder (an all-zeros digest that never verifies against any
+#: password) until the E2E suite's first real run against a live stack caught
+#: it - every seeded login had been broken since the row was written.
 DEV_PASSWORD_HASH = (
-    "$argon2id$v=19$m=65536,t=3,p=4$c2VlZHNlZWRzZWVkc2VlZA$"
-    "0000000000000000000000000000000000000000000"
+    "$argon2id$v=19$m=19456,t=2,p=1$rr4iuh7y37goFowT/MFU2Q$"
+    "QnFTMGU0zDvdm02+HwIuw+1kD9hRjx1I2llCaIMiIVo"
 )
 
 FINE_CLASSES = (
@@ -122,7 +125,7 @@ async def seed() -> None:
         alice = models.UserModel(
             id=USER_ALICE,
             username="alice_eng",
-            email="alice@geovision.test",
+            email="alice@gvmail.com",
             password_hash=DEV_PASSWORD_HASH,
             full_name="Alice Reyes",
             professional_role=ProfessionalRole.ENGINEER,
@@ -133,7 +136,7 @@ async def seed() -> None:
         bruno = models.UserModel(
             id=USER_BRUNO,
             username="bruno_pm",
-            email="bruno@geovision.test",
+            email="bruno@gvmail.com",
             password_hash=DEV_PASSWORD_HASH,
             full_name="Bruno Santos",
             professional_role=ProfessionalRole.MANAGER,
@@ -144,7 +147,7 @@ async def seed() -> None:
         carla = models.UserModel(
             id=USER_CARLA,
             username="carla_owner",
-            email="carla@geovision.test",
+            email="carla@gvmail.com",
             password_hash=DEV_PASSWORD_HASH,
             full_name="Carla Dela Cruz",
             professional_role=ProfessionalRole.HOME_OWNER,

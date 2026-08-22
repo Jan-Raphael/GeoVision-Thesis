@@ -57,6 +57,7 @@ switch ($Task.ToLower()) {
         @(
             @('env', 'Create .env and generate secrets'),
             @('setup', 'Install backend + ai + dashboard deps and git hooks'),
+            @('dev', 'Start infra + migrate, then api/worker/dashboard in new windows'),
             @('up', 'Start postgres, redis, minio'),
             @('down', 'Stop the dev stack (keeps volumes)'),
             @('logs', 'Tail dev stack logs'),
@@ -75,7 +76,14 @@ switch ($Task.ToLower()) {
             @('test', 'Run every test suite'),
             @('test-unit', 'Backend unit tests only'),
             @('e2e', 'Module 09 end-to-end (API + worker must be up)'),
+            @('e2e-ui', 'Playwright visitor + owner journeys (full stack must be up + seeded)'),
+            @('load-ingest', 'k6 load test: HMAC-signed ingest (needs a paired device)'),
+            @('load-read', 'k6 load test: anonymous feed/project reads'),
             @('cov', 'Backend tests with HTML coverage'),
+            @('evaluate', 'Run every AI evaluation artifact currently possible (gv-evaluate)'),
+            @('openapi', 'Export documentation/openapi.json from the live FastAPI schema'),
+            @('erd', 'Export documentation/erd.mmd from the live SQLAlchemy metadata'),
+            @('docs', 'openapi + erd together'),
             @('check', 'Everything CI runs, locally'),
             @('clean', 'Remove caches and build artifacts'),
             @('nuke', 'Stop stack AND DELETE ALL DEV DATA')
@@ -116,6 +124,25 @@ switch ($Task.ToLower()) {
     'migrate' {
         Write-Step 'Applying migrations'
         Invoke-In 'backend' 'uv' @('run', 'alembic', 'upgrade', 'head')
+    }
+
+    'dev' {
+        # Convenience wrapper: bring up infra + migrate in this window, then open
+        # api/worker/dashboard each in their own window so their logs stay legible.
+        # Equivalent to running `up`, `migrate`, `api`, `worker`, `dashboard` by hand.
+        if (-not (Test-Docker)) { exit 1 }
+        Write-Step 'Starting postgres, redis, minio'
+        & docker @Compose up -d
+        & docker @Compose ps
+        Write-Step 'Applying migrations'
+        Invoke-In 'backend' 'uv' @('run', 'alembic', 'upgrade', 'head')
+        Write-Step 'Opening api, worker, dashboard in new windows'
+        Start-Process powershell -ArgumentList '-NoExit', '-Command', "cd '$Root'; .\dev.ps1 api"
+        Start-Process powershell -ArgumentList '-NoExit', '-Command', "cd '$Root'; .\dev.ps1 worker"
+        Start-Process powershell -ArgumentList '-NoExit', '-Command', "cd '$Root'; .\dev.ps1 dashboard"
+        Write-Ok 'Started. API http://localhost:8000/docs -- Dashboard http://localhost:5173'
+        Write-Warn 'If you use a native (non-Docker) PostgreSQL, make sure it is already running --'
+        Write-Warn 'this task does not start it (see README / Local-Environment-Setup.md).'
     }
 
     'seed' {
@@ -191,9 +218,69 @@ switch ($Task.ToLower()) {
         Invoke-In 'backend' 'uv' @('run', 'python', '-m', 'scripts.e2e_module09')
     }
 
+    'e2e-ui' {
+        # Needs the full stack up (.\dev.ps1 dev) AND a freshly seeded
+        # database (.\dev.ps1 seed) - the journeys below assert against the
+        # exact seeded users/projects in scripts/seed_db.py.
+        #
+        # PLAYWRIGHT_BROWSERS_PATH keeps the downloaded browser inside the
+        # repo (.cache/ms-playwright) rather than %LOCALAPPDATA% - every tool
+        # this project needs lives on whichever drive the repo was cloned to.
+        $env:PLAYWRIGHT_BROWSERS_PATH = "$Root/.cache/ms-playwright"
+        Write-Step 'Playwright: visitor + owner journeys'
+        if (-not (Test-Path (Join-Path $Root 'tests/e2e/node_modules'))) {
+            Invoke-In 'tests/e2e' 'npm' @('install')
+        }
+        if (-not (Test-Path $env:PLAYWRIGHT_BROWSERS_PATH)) {
+            Write-Step 'Downloading the Playwright browser (first run only)'
+            Invoke-In 'tests/e2e' 'npx' @('playwright', 'install', 'chromium')
+        }
+        Invoke-In 'tests/e2e' 'npx' @('playwright', 'test')
+    }
+
+    'load-ingest' {
+        # Needs a paired device - set GV_DEVICE_ID / GV_DEVICE_SECRET first
+        # (see the docstring in tests/load/ingest.js for how to get them).
+        # Custom --vus/--duration/-e flags: invoke .tools/k6/k6.exe directly.
+        if (-not (Test-Path "$Root/.tools/k6/k6.exe")) {
+            Write-Warn '.tools/k6/k6.exe not found - see Local-Environment-Setup.md to install it.'
+            exit 1
+        }
+        Write-Step 'k6: ingest load test (5 VUs, 30s)'
+        & "$Root/.tools/k6/k6.exe" run "$Root/tests/load/ingest.js" --vus 5 --duration 30s
+    }
+
+    'load-read' {
+        # Custom --vus/--duration flags: invoke .tools/k6/k6.exe directly.
+        if (-not (Test-Path "$Root/.tools/k6/k6.exe")) {
+            Write-Warn '.tools/k6/k6.exe not found - see Local-Environment-Setup.md to install it.'
+            exit 1
+        }
+        Write-Step 'k6: anonymous read-path load test (20 VUs, 30s)'
+        & "$Root/.tools/k6/k6.exe" run "$Root/tests/load/api-read.js" --vus 20 --duration 30s
+    }
+
     'cov' {
         Invoke-In 'backend' 'uv' @('run', 'pytest', '--cov=app', '--cov-report=html', '--cov-report=term-missing')
         Write-Ok 'Report: backend/htmlcov/index.html'
+    }
+
+    'evaluate' {
+        Write-Step 'Running every AI evaluation artifact currently possible'
+        Invoke-In 'ai' 'uv' @('run', 'gv-evaluate')
+    }
+
+    'openapi' {
+        Invoke-In 'backend' 'uv' @('run', 'python', '-m', 'scripts.export_openapi')
+    }
+
+    'erd' {
+        Invoke-In 'backend' 'uv' @('run', 'python', '-m', 'scripts.export_erd')
+    }
+
+    'docs' {
+        Invoke-In 'backend' 'uv' @('run', 'python', '-m', 'scripts.export_openapi')
+        Invoke-In 'backend' 'uv' @('run', 'python', '-m', 'scripts.export_erd')
     }
 
     'check' {
@@ -202,8 +289,12 @@ switch ($Task.ToLower()) {
         Invoke-In 'ai' 'uv' @('run', 'ruff', 'check', '.')
         Invoke-In 'backend' 'uv' @('run', 'mypy', 'app')
         Invoke-In 'backend' 'uv' @('run', 'lint-imports')
-        Invoke-In 'backend' 'uv' @('run', 'pytest')
-        Invoke-In 'ai' 'uv' @('run', 'pytest')
+        # --cov is what actually enforces the fail_under thresholds in
+        # backend/pyproject.toml and ai/pyproject.toml - a plain `pytest`
+        # with no --cov flag collects no coverage and enforces nothing, so
+        # `check` would otherwise silently pass a build CI would fail.
+        Invoke-In 'backend' 'uv' @('run', 'pytest', '--cov=app', '--cov-report=term-missing')
+        Invoke-In 'ai' 'uv' @('run', 'pytest', '--cov=ai', '--cov-report=term-missing')
         Write-Ok 'all checks passed'
     }
 

@@ -151,3 +151,10 @@ omit = ["*/tests/*", "*/__init__.py"]
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]
+# Measured 88% on a full local run the day Module 15 shipped (`ai.evaluation`
+# itself was 97%). Set a few points under that, not at it — a threshold equal
+# to today's exact number breaks the very next commit that adds one untested
+# line, which teaches people to stop trusting the gate rather than to write
+# the test. Module-15-Testing-and-Evaluation.md's target is >=90% specifically
+# on `ai/progress/`; this is the package-wide floor.
+fail_under = 85

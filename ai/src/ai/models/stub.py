@@ -45,15 +45,19 @@ __all__ = ["STUB_DETECTION_CLASSES", "StubClassifier", "StubDetector"]
 
 logger = logging.getLogger(__name__)
 
-#: What the real YOLOv8 will be trained to find (``Module-08-YOLO-Detection``).
+#: What the real YOLOv8 will be trained to find (``Module-08-YOLO-Detection``, revised
+#: 2026-08-18 by ADR-036 — structural/finishing elements, not site-activity objects).
 STUB_DETECTION_CLASSES = (
-    "column",
     "wall",
     "beam",
-    "roof_truss",
-    "scaffolding",
-    "excavator",
-    "worker",
+    "column",
+    "rebar",
+    "roofing",
+    "window",
+    "door",
+    "tile",
+    "railing",
+    "lighting",
 )
 
 

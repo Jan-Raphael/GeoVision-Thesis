@@ -1,0 +1,282 @@
+erDiagram
+    ai_models {
+        uuid id PK
+        varchar name
+        varchar kind
+        varchar architecture
+        varchar version
+        varchar framework
+        text weights_key
+        jsonb class_names
+        integer input_size
+        jsonb metrics
+        boolean is_active
+        datetime trained_at
+        datetime created_at
+    }
+    contact_messages {
+        uuid id PK
+        varchar name
+        varchar email
+        varchar subject
+        text message
+        varchar ip_address
+        varchar user_agent
+        datetime handled_at
+        datetime created_at
+    }
+    detection_summaries {
+        uuid id PK
+        uuid image_id FK
+        jsonb counts
+        integer total_objects
+        integer inference_ms
+        datetime created_at
+    }
+    detections {
+        uuid id PK
+        uuid image_id FK
+        uuid model_id FK
+        varchar class_name
+        numeric confidence
+        numeric bbox_x
+        numeric bbox_y
+        numeric bbox_w
+        numeric bbox_h
+        datetime created_at
+    }
+    device_events {
+        uuid id PK
+        uuid device_id FK
+        varchar event_type
+        jsonb payload
+        integer battery_mv
+        integer rssi_dbm
+        datetime created_at
+    }
+    devices {
+        uuid id PK
+        uuid project_id FK
+        varchar device_name
+        varchar face
+        numeric weight
+        text secret_encrypted
+        varchar status
+        varchar firmware_version
+        varchar hardware_id
+        jsonb capture_schedule
+        jsonb homography
+        jsonb roi_polygon
+        datetime last_seen_at
+        integer last_battery_mv
+        integer last_rssi_dbm
+        datetime paired_at
+        datetime revoked_at
+        datetime created_at
+        datetime updated_at
+    }
+    images {
+        uuid id PK
+        uuid project_id FK
+        uuid device_id FK
+        varchar filename
+        text storage_key
+        text preprocessed_key
+        text thumb_key
+        varchar source
+        varchar status
+        datetime captured_at
+        datetime uploaded_at
+        integer seq_number
+        numeric latitude
+        numeric longitude
+        numeric gps_accuracy_m
+        numeric altitude_m
+        integer satellites
+        integer width
+        integer height
+        bigint size_bytes
+        varchar sha256
+        jsonb exif
+        jsonb quality_flags
+        text rejected_reason
+        datetime created_at
+    }
+    notifications {
+        uuid id PK
+        uuid user_id FK
+        uuid project_id FK
+        varchar notification_type
+        varchar title
+        text body
+        datetime read_at
+        datetime created_at
+    }
+    pairing_tokens {
+        uuid id PK
+        uuid project_id FK
+        varchar face
+        text token_hash
+        datetime expires_at
+        datetime used_at
+        uuid used_by_device_id FK
+        uuid created_by FK
+        datetime created_at
+    }
+    predictions {
+        uuid id PK
+        uuid image_id FK
+        uuid model_id FK
+        integer fine_class_index
+        varchar fine_class
+        numeric confidence
+        varchar macro_stage
+        numeric raw_progress_pct
+        boolean is_eligible
+        boolean low_confidence
+        jsonb class_probabilities
+        integer inference_ms
+        datetime created_at
+    }
+    project_members {
+        uuid id PK
+        uuid project_id FK
+        uuid user_id FK
+        varchar membership_role
+        varchar membership_status
+        uuid invited_by FK
+        datetime invited_at
+        datetime responded_at
+        datetime created_at
+    }
+    project_progress_snapshots {
+        uuid id PK
+        uuid project_id FK
+        datetime window_start
+        datetime window_end
+        numeric raw_pct
+        numeric ema_pct
+        numeric displayed_pct
+        varchar macro_stage
+        numeric foundation_pct
+        numeric framing_pct
+        numeric roofing_pct
+        numeric finishing_pct
+        numeric approval_pct
+        integer eligible_image_count
+        array contributing_image_ids
+        jsonb device_weights
+        varchar algorithm_version
+        datetime created_at
+    }
+    projects {
+        uuid id PK
+        uuid owner_id FK
+        varchar name
+        varchar project_code
+        text description
+        varchar intended_use
+        varchar location_label
+        numeric latitude
+        numeric longitude
+        date start_date
+        date deadline_date
+        integer worker_count
+        varchar visibility
+        varchar status
+        varchar approval_state
+        numeric progress_pct
+        varchar macro_stage
+        varchar window_mode
+        varchar timezone
+        datetime last_capture_at
+        datetime completed_at
+        uuid approved_by FK
+        datetime approved_at
+        text inspection_notes
+        datetime archived_at
+        datetime created_at
+        datetime updated_at
+    }
+    reference_assets {
+        uuid id PK
+        uuid project_id FK
+        uuid uploaded_by FK
+        varchar kind
+        text storage_key
+        varchar original_filename
+        varchar mime_type
+        bigint size_bytes
+        text notes
+        boolean is_public
+        datetime created_at
+    }
+    remarks {
+        uuid id PK
+        uuid project_id FK
+        uuid author_id FK
+        varchar remark_type
+        varchar severity
+        text message
+        boolean is_public
+        date effective_from
+        date effective_to
+        datetime created_at
+    }
+    reports {
+        uuid id PK
+        uuid project_id FK
+        uuid requested_by FK
+        varchar kind
+        varchar report_format
+        date period_start
+        date period_end
+        varchar status
+        text storage_key
+        text error
+        datetime requested_at
+        datetime completed_at
+    }
+    users {
+        uuid id PK
+        citext username
+        citext email
+        text password_hash
+        varchar full_name
+        varchar professional_role
+        varchar profile_visibility
+        varchar company
+        text bio
+        text avatar_key
+        boolean is_active
+        datetime email_verified_at
+        datetime created_at
+        datetime updated_at
+    }
+    users ||--o{ audit_logs : "has"
+    devices ||--o{ audit_logs : "has"
+    images ||--o{ detection_summaries : "has"
+    images ||--o{ detections : "has"
+    ai_models ||--o{ detections : "has"
+    devices ||--o{ device_events : "has"
+    projects ||--o{ devices : "has"
+    devices ||--o{ images : "has"
+    projects ||--o{ images : "has"
+    projects ||--o{ notifications : "has"
+    users ||--o{ notifications : "has"
+    devices ||--o{ pairing_tokens : "has"
+    users ||--o{ pairing_tokens : "has"
+    projects ||--o{ pairing_tokens : "has"
+    ai_models ||--o{ predictions : "has"
+    images ||--o{ predictions : "has"
+    projects ||--o{ project_members : "has"
+    users ||--o{ project_members : "has"
+    projects ||--o{ project_progress_snapshots : "has"
+    users ||--o{ projects : "has"
+    projects ||--o{ reference_assets : "has"
+    users ||--o{ reference_assets : "has"
+    users ||--o{ refresh_tokens : "has"
+    users ||--o{ remarks : "has"
+    projects ||--o{ remarks : "has"
+    projects ||--o{ reports : "has"
+    users ||--o{ reports : "has"

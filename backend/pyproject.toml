@@ -214,3 +214,10 @@ exclude_lines = [
     "raise NotImplementedError",
     "@abstractmethod",
 ]
+# Module-15-Testing-and-Evaluation.md's target is >=80% overall — cleared.
+# Measured 81.00% on a full run against live Postgres/Redis/MinIO
+# (698 tests, 2026-08-18; see Open-Questions Q17, now closed). Set a few
+# points under that measured number, not at it, for the same reason
+# ai/pyproject.toml's threshold is: equal-to-today's-number breaks the very
+# next commit that adds one untested line.
+fail_under = 78

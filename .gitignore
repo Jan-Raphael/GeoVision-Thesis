@@ -67,6 +67,18 @@ dashboard/dist-ssr/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# --- E2E / load-test tooling -------------------------------------------------
+# Downloaded binaries, kept inside the repo tree (not %LOCALAPPDATA%/Program
+# Files) so every machine-local tool this project needs lives on whichever
+# drive the repo itself was cloned to — see Local-Environment-Setup.md.
+# .cache/ — Playwright's browser binaries (PLAYWRIGHT_BROWSERS_PATH)
+.cache/
+# .tools/ — k6, and any other standalone CLI this project bundles
+.tools/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/blob-report/
 .eslintcache
 
 # --- PlatformIO / firmware -------------------------------------------------
