@@ -2,7 +2,7 @@
 title: Naming Conventions
 type: architecture
 status: canonical
-updated: 2026-08-12
+updated: 2026-08-18
 ---
 
 # Naming Conventions
@@ -77,9 +77,10 @@ Used only in `dataset/`, where the stage is a **ground-truth label**.
 GV_<PROJECT>_<STAGE>_<NUMBER>.jpg
 ```
 
-- Examples: `GV_CB01_FDN_0001.jpg`, `GV_CB01_COL_0045.jpg`.
+- Examples: `GV_CB01_FDN_0001.jpg`, `GV_CB01_STR_0045.jpg`.
 - `NUMBER` is 4-digit zero-padded, unique within `(PROJECT, STAGE)`.
-- Stage tokens: see [[Construction-Stages]] (`CLR, EXC, FDN, FTG, COL, SLB, WAL, ROF, FIN, CMP`).
+- Stage tokens: see [[Construction-Stages]] (`FDN, STR, ROF, FIN` — narrowed from the retired
+  10-token list by [[ADR-Index#ADR-036|ADR-036]], 2026-08-18).
 - A production capture that gets human-labelled and promoted into the dataset is **renamed**
   into this namespace, and `dataset/metadata/metadata.csv` records its original runtime name.
 

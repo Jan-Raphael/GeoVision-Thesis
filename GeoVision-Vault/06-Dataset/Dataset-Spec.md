@@ -2,7 +2,7 @@
 title: Dataset Spec
 type: dataset
 status: canonical
-updated: 2026-08-12
+updated: 2026-08-18
 ---
 
 # Dataset Specification
@@ -25,8 +25,13 @@ dataset/
     └── progress_reference.csv         # tracked in git — see [[Construction-Stages]]
 ```
 
+> **Revised 2026-08-18 ([[ADR-Index#ADR-036|ADR-036]]).** The classifier now has 4 classes,
+> not 10 — see [[Construction-Stages]]. `dataset/raw/`'s existing per-site folders
+> (`Foundation`, `Structural`, `Roofing`, `Finishing`) already match this table; no relabeling
+> is needed at the macro level, only for the images still sitting untagged at a site's root.
+
 Class folder names are the exact lowercase snake_case class names:
-`site_clearing, excavation, footings, foundation, columns, slab, walls, roof, finishing, completed`.
+`foundation, structural, roofing, finishing`.
 
 ## Split policy — 70 / 15 / 15
 
@@ -56,8 +61,14 @@ GV_CB01_FDN_0001.jpg,CB01,foundation,13.628000,123.185000,2026-03-04T07:00:00Z,E
 
 | Class | Minimum | Comfortable |
 |---|---|---|
-| each of the 10 | 150 | 400+ |
-| **total** | **1 500** | **4 000+** |
+| each of the 4 | 150 | 400+ |
+| **total** | **600** | **1 600+** |
+
+Lower than the old 1,500-total floor because there are fewer classes now, **not** because less
+data is needed overall — the resolution that used to come from 10 fine classes now has to come
+from YOLO detection + physical-change signal within each of these 4 buckets ([[Open-Questions|Q18]]),
+which needs its own image volume (detection-annotated, same images) tracked separately once the
+fusion design lands.
 
 With a fixed-angle camera producing 2 images/day, one site yields ~60 images/month — not
 enough alone. **Plan for all four sources:**
@@ -69,9 +80,10 @@ enough alone. **Plan for all four sources:**
    of work — one time-lapse can cover every stage of one building; record source URLs and
    licence terms in `metadata.csv`).
 
-Class imbalance is expected (`site_clearing` and `completed` are rare, `walls` is common).
-Handle with class-weighted `CrossEntropyLoss` + a `WeightedRandomSampler`, and **report
-per-class recall**, not just accuracy.
+Class imbalance is still plausible even at 4 classes (a project spends longer in some stages
+than others, and `dataset/raw/`'s current counts already skew toward `structural`). Handle
+with class-weighted `CrossEntropyLoss` + a `WeightedRandomSampler`, and **report per-class
+recall**, not just accuracy.
 
 ## Augmentation (Albumentations **2.x**, applied at train time)
 
@@ -104,10 +116,14 @@ that the building leaves the frame.
 
 ## Detection dataset (YOLOv8)
 
-Classes: `column, wall, roof, steel_bar, scaffolding, worker, equipment` (indices frozen in
-`dataset/labels/detection/data.yaml`). ~300–500 annotated images is workable for a
-comparison model; annotate the *same* images used for classification so the two models can
-be compared on identical inputs.
+Classes (revised 2026-08-18, [[ADR-Index#ADR-036|ADR-036]]): `wall (CHB wall), beam, column,
+rebar, roofing, window, door, tile, railing, lighting` (10 classes — indices to be frozen in
+`dataset/labels/detection/data.yaml` once annotation starts; supersedes the old 7-class list
+in [[Module-08-YOLO-Detection]]). ~300–500 annotated images is workable for a comparison
+model; annotate the *same* images used for classification so the two models can be compared on
+identical inputs. Detection is no longer purely a corroboration side-channel — it's a direct
+input to the fused progress calculator once [[Open-Questions|Q18]] is resolved, so its
+annotated volume matters more than it did under the old advisory-only design.
 
 ## Data hygiene
 

@@ -2,7 +2,7 @@
 title: ADR Index
 type: decisions
 status: canonical
-updated: 2026-08-14
+updated: 2026-08-18
 ---
 
 # Architecture Decision Records
@@ -16,7 +16,8 @@ it and mark the old one `Superseded by ADR-NNN`.
 ---
 
 ## ADR-001 — Two-layer stage model (10 fine classes → 5 macro stages)
-**Status:** Accepted · 2026-08-12
+**Status:** Accepted · 2026-08-12 · **Layer 1 narrowed by [[ADR-Index#ADR-036|ADR-036]]
+(2026-08-18) — Layer 2 (macro stages) unchanged**
 **Context.** The original architecture specified 10 construction classes; the dashboard spec
 specified 4 stages worth 20 % each plus a 20 % approval stage. Picking one discards
 something valuable: 10 classes make a much stronger ML result, while 5 macro stages are what
@@ -91,7 +92,9 @@ documented as the production hardening path); JWT (refresh flows and asymmetric 
 are awkward on a device that sleeps for hours).
 
 ## ADR-007 — The AI cannot mark a project complete
-**Status:** Accepted · 2026-08-12
+**Status:** Accepted · 2026-08-12 · **trigger mechanism amended by
+[[ADR-Index#ADR-037|ADR-037]] (2026-08-18) — the "human adds the final 20%" principle below
+is unchanged**
 **Context.** Progress readings could plausibly inform payment, scheduling, or handover
 decisions.
 **Decision.** The machine ceiling is 80 %. Reaching it sets `awaiting_inspection` and
@@ -648,6 +651,104 @@ happily while the boundary is broken, exactly as in [[ADR-Index#ADR-033]].
 and worth doing if a second enum drifts, but it adds a codegen step and a committed artefact to
 solve today what twenty lines pin exactly. Also rejected: fetching the enum at runtime, which
 turns a static list into a network dependency on the one page a signed-out visitor must reach.
+
+---
+
+## ADR-035 - Manuscript screenshots and E2E journeys share one Playwright project, not two
+**Status:** Accepted 2026-08-18
+**Context.** `Module-15-Testing-and-Evaluation.md` specified `scripts/screenshot_dashboard.py`
+(Python) for the consistent-viewport dashboard screenshots the thesis needs (Figure 12), separate
+from the E2E visitor/owner journeys, which the same module places under `tests/e2e/` (Playwright).
+Nothing about the screenshot job actually needs Python - it needs a browser, a stable viewport,
+and a place to save PNGs, which is exactly what the E2E suite already has.
+**Decision.** The screenshot job is a Playwright *test* (`tests/e2e/screenshot-dashboard.spec.ts`)
+in the same project as the journeys, not a standalone Python script. It navigates the same pages a
+visitor would, screenshots each at a fixed 1280x800 viewport, and writes them to
+`documentation/screenshots/`.
+**Consequences.** One browser-automation stack to install (`npx playwright install`) and maintain
+instead of two; the screenshot job inherits retry-on-flake, trace-on-failure, and CI wiring for
+free instead of needing its own. Numbers and screenshots for the manuscript now come from the same
+two commands (`gv-evaluate`, `npx playwright test`) rather than three. Cost: the vault's original
+filename (`scripts/screenshot_dashboard.py`) no longer exists - anyone searching for it by that
+name needs this ADR to find where the job went.
+**Rejected.** Writing it in Python with the `playwright` pip package as originally specified -
+correct, but installs and updates a second copy of Chromium alongside the one `@playwright/test`
+already manages for the E2E journeys, for a job with no Python-specific requirement.
+
+---
+
+## ADR-036 — Classifier narrows to 4 macro-aligned classes; YOLO's object list is redefined
+**Status:** Accepted · 2026-08-18 · narrows [[ADR-Index#ADR-001|ADR-001]]'s Layer 1, amends
+[[Module-08-YOLO-Detection]]
+**Context.** ADR-001 kept two layers so the CNN could produce a richer 10-class result while
+the UI stayed at 5 macro stages. In practice the team's own collected raw dataset (663 images
+across 4 sites, [[Dataset-Spec]]) was already gathered as 4 buckets — Foundation, Structural,
+Roofing, Finishing — matching the macro stages, not the 10 fine classes. Annotating a 10-way
+ordinal boundary (footings vs foundation, columns vs slab vs walls, finishing vs completed)
+adds labeling cost and inter-annotator disagreement risk for a distinction nobody asked for.
+The team decided to scope the classifier to the 4 macro-aligned classes directly and move the
+finer structural/finishing signal into YOLO detection instead.
+**Decision.**
+1. Layer 1 (classifier) becomes exactly 4 classes: `foundation, structural, roofing,
+   finishing` — tokens `FDN, STR, ROF, FIN` — one class per macro stage, same floor/ceiling as
+   today's macro-stage table (0–20 / 20–40 / 40–60 / 60–80). There is no `completed` class
+   (see [[ADR-Index#ADR-037|ADR-037]]) and no separate site_clearing / excavation / footings /
+   columns / slab distinctions.
+2. Layer 2 (macro stages + Approval) is **unchanged** — still Foundation / Framing / Roofing /
+   Finishing / Approval at 20 points each. Note the second macro stage is named "Framing" in
+   the UI layer but its classifier class is named `structural` — same stage, two labels used in
+   two different contexts; this is intentional, not a mismatch.
+3. YOLO's detection class list is replaced: `wall (CHB wall), beam, column, rebar (steel
+   reinforcement), roofing, window, door, tile, railing, lighting` (10 classes — supersedes the
+   7-item list `column, wall, roof, steel_bar, scaffolding, worker, equipment` previously in
+   [[Module-08-YOLO-Detection]]). It drops the site-activity objects (`worker`, `equipment`,
+   generic `scaffolding`) and adds the specific structural and finishing elements that used to
+   be implied by the retired fine classes.
+4. Detection stops being purely advisory. Module-08's original rule — "the classifier remains
+   authoritative for progress; a disagreement only raises a flag, never overrides the number" —
+   is superseded. YOLO detections become a direct input to the progress calculator, not just a
+   corroboration signal. **The exact fusion formula is not yet decided** — tracked as
+   [[Open-Questions|Q18]]; do not treat [[Progress-Calculation]] §1 or Module-08's
+   corroboration section as current until Q18 is resolved.
+**Consequences.** Simpler, faster annotation (a 4-way judgement instead of 10-way); the
+buckets already used to sort `dataset/raw/` become the literal ground truth, so no relabeling
+is needed at the macro level — only within-bucket triage for images still sitting untagged.
+Cost: a materially weaker classifier-only confusion matrix as a standalone thesis result — a
+4-class ordinal problem is easier and the number alone will look less impressive than a 10-way
+one. State this plainly and let the fusion/corroboration design (once Q18 is resolved) be the
+actual methodological contribution instead. The "Visual disambiguation notes" boundary table in
+[[Construction-Stages]] no longer describes classifier decision boundaries; it stays as
+background for why YOLO's element list was chosen the way it was.
+**Rejected.** (a) Keeping all 10 fine classes and adding YOLO as a third, independent signal —
+rejected because it does not reduce annotation cost, which was the actual constraint driving
+this change. (b) Dropping detection entirely and going classifier-only at 4 classes — rejected
+because 4 classes alone cannot express any position within a 20-point stage range, and the
+team specifically wants sub-stage resolution recovered from detections + physical change
+rather than lost outright.
+
+## ADR-037 — Approval handoff is owner-initiated; nothing auto-flips a project to `awaiting_inspection`
+**Status:** Accepted · 2026-08-18 · amends [[ADR-Index#ADR-007|ADR-007]] /
+[[Progress-Calculation]] §5
+**Context.** ADR-007's mechanism: reaching the 80 % machine ceiling with a `completed` (`CMP`)
+class detection auto-set `project.approval_state = 'awaiting_inspection'` and notified the
+owner. [[ADR-Index#ADR-036|ADR-036]] removes the `completed` class, so that trigger has no
+signal left to fire on.
+**Decision.** No automatic state transition or notification at 80 %. The owner reviews the
+dashboard themselves and manually invokes the existing `POST /projects/{id}/approve` action
+whenever they judge the exterior work finished. The endpoint's `displayed >= 80 %` precondition
+and its audit trail (who, when, what notes) are unchanged. ADR-007's actual principle — the AI
+cannot mark a project complete, only an authorized human adds the final 20 % — is preserved;
+only the *notification mechanism* is removed.
+**Consequences.** One less piece of state to model (no `awaiting_inspection` intermediate
+status driven by ML, no notification wired to a classifier signal); the owner takes on the
+responsibility of noticing when a project looks ready, consistent with keeping the human
+sign-off the accountable step rather than the machine. Cost: an owner who does not check the
+dashboard regularly gets no prompt — a real limitation, worth stating in the thesis. Revisitable
+later without reopening this decision: a YOLO-based "finishing stable across N captures" signal
+could reintroduce a *notification* (nudge the owner to go look) without reintroducing an
+*automatic state change*.
+**Rejected.** Keying an automatic trigger off `finishing` reaching the ceiling instead of
+`completed` — considered and explicitly rejected in favor of owner-only judgement.
 
 ---
 

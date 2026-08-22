@@ -2,20 +2,25 @@
 title: Annotation Guide (CVAT)
 type: dataset
 status: canonical
-updated: 2026-08-12
+updated: 2026-08-18
 ---
 
 # Annotation Guide — CVAT
 
 Two annotation jobs run over the **same images**:
 
-1. **Classification** — one tag per image (10 classes). CVAT *tags*, exported as CSV.
-2. **Detection** — bounding boxes (7 classes). Exported as **YOLO 1.1**.
+1. **Classification** — one tag per image (4 classes). CVAT *tags*, exported as CSV.
+2. **Detection** — bounding boxes (10 classes). Exported as **YOLO 1.1**.
 
 ## CVAT setup
 
-- Project `GeoVision-Classification`, labels = the 10 fine classes (see [[Construction-Stages]]).
-- Project `GeoVision-Detection`, labels = `column, wall, roof, steel_bar, scaffolding, worker, equipment`.
+> **Revised 2026-08-18 ([[ADR-Index#ADR-036|ADR-036]]).** Classification is now 4 labels, not
+> 10; detection's label list changed too.
+
+- Project `GeoVision-Classification`, labels = the 4 classes (see [[Construction-Stages]]):
+  `foundation, structural, roofing, finishing`.
+- Project `GeoVision-Detection`, labels = `wall (CHB wall), beam, column, rebar, roofing,
+  window, door, tile, railing, lighting`.
 - Task per data source (`site_CB01`, `timelapse_youtube_01`, …) so provenance survives export.
 - Export: **CVAT for images 1.1** (tags) → converted by `scripts/prepare_dataset.py` into
   `dataset/labels/classification.csv`; **YOLO 1.1** → `dataset/labels/detection/`.
@@ -37,10 +42,11 @@ Two annotation jobs run over the **same images**:
 Boundary table (memorize this): see the "Visual disambiguation notes" in
 [[Construction-Stages]].
 
-### The `completed` class
-Reserve it for a genuinely finished exterior: no scaffolding, clean site, painted/finished
-façade, windows and doors installed. "Almost done" is `finishing`. Being strict here is what
-makes the 80 % → manual-inspection handoff meaningful.
+### There is no `completed` class anymore
+[[ADR-Index#ADR-036|ADR-036]] retired it. A genuinely finished exterior is still labelled
+`finishing` — the classifier no longer distinguishes "almost done" from "done"; that judgement
+belongs to the owner alone at approval time ([[ADR-Index#ADR-037|ADR-037]]), not to the
+annotator or the model.
 
 ## Detection rules
 

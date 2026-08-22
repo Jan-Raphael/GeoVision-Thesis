@@ -2,7 +2,7 @@
 title: Progress Calculation
 type: domain
 status: canonical
-updated: 2026-08-14
+updated: 2026-08-18
 ---
 
 # Progress Calculation — the core algorithm
@@ -10,6 +10,18 @@ updated: 2026-08-14
 > This is the **thesis contribution**. It must be implemented as **pure functions** in
 > `ai/progress/aggregator.py` with no I/O, no ORM, no torch — so it is fully unit-testable
 > and can be walked through line by line during the defense.
+
+> ⚠ **§1 and §5 below describe the pre-2026-08-18 design and are out of date.**
+> [[ADR-Index#ADR-036|ADR-036]] narrowed the classifier to 4 classes and moved sub-stage
+> resolution to a fused classifier+detection+physical-change signal that is **not yet
+> designed** — tracked as [[Open-Questions|Q18]]. [[ADR-Index#ADR-037|ADR-037]] replaces §5's
+> automatic `awaiting_inspection` trigger with an owner-initiated one. §2, §3, §4, §6, §7 (the
+> device-median → multi-camera-fusion → EMA/ratchet → per-stage-percentage → persistence
+> pipeline) are unaffected — they operate on whatever `raw_pct` §1 hands them, regardless of
+> how it's computed, and stay canonical as written. Do not implement §1/§5 as written below
+> until Q18 is resolved; the code today (`ai/progress/aggregator.py`, tested against the
+> worked example in §8) still reflects the retired 10-class design and has not been touched
+> pending that decision.
 
 ---
 
@@ -96,7 +108,14 @@ REGRESS_CONFIRMATIONS = 3   # windows needed to allow the number to move DOWN
 
 ## 5. Approval stage (the last 20%)
 
+**Superseded 2026-08-18 by [[ADR-Index#ADR-037|ADR-037]].** There is no automatic
+`awaiting_inspection` transition and no ML-triggered notification — the `completed`/`CMP`
+class this depended on no longer exists ([[ADR-Index#ADR-036|ADR-036]]). The owner watches the
+dashboard themselves and opens the approval action whenever they judge the exterior work
+finished; nothing prompts them. (Retired design, kept for history:)
+
 ```
+# retired — no longer runs
 if displayed >= 80.0 and all four macro stages confirmed complete:
     project.approval_state = 'awaiting_inspection'
     → notification to owner + collaborators with inspect permission

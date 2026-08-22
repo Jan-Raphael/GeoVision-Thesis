@@ -2,7 +2,7 @@
 title: PENDING — master priority board
 type: index
 status: living
-updated: 2026-08-14
+updated: 2026-08-18
 ---
 
 # PENDING — what needs doing, in priority order
@@ -40,20 +40,32 @@ updated: 2026-08-14
 | ~~P0-2~~ | ~~Update Windows~~ | — | ✅ **not needed.** Build 19045 already meets Docker's minimum. |
 | ~~P0-3~~ | ~~Install Docker Desktop~~ | — | ✅ **done 2026-08-14.** Docker 29.6.2 + Compose v5.3.1, WSL data root on `F:\Docker\wsl`. Redis and MinIO containerised; PostgreSQL stays native behind a compose `db` profile. `/health/ready` returns 200 ready. |
 
-**Nothing is blocking code right now.** Modules 01–06 and **09** are done, and the whole
-stack has been exercised end to end against live services.
+**Nothing is blocking code right now.** Modules 01–06, **09–12**, and **14** are done, and the
+whole stack has been exercised end to end against live services.
 
-**Build next: [[Module-15-Testing-and-Evaluation]], then [[Module-16-Deployment]].** Every
-module that does not need hardware or the dataset is now done: 01-06, 09-12, 14. **13 waits on
-hardware; 07/08 on the dataset** - and those two are the whole remaining critical path, which
-is exactly what the P1 section below has said since day one.
+**In progress: [[Module-15-Testing-and-Evaluation]] (started 2026-08-18).** Everything buildable
+without hardware or a labelled dataset has shipped — `ai/evaluation/` (metrics, benchmark,
+detector eval, progress eval, the `gv-evaluate` CLI), coverage thresholds enforced in CI, the
+generalised client/server contract test, `documentation/openapi.json` + `erd.mmd` export, a
+Playwright E2E scaffold (now run for real, 12/12 passing, Q16 closed), two k6 load scripts, and
+[[Hardware-Test-Log]]. **Next up:** [[Open-Questions|Q18]] (the fused progress formula), then
+[[Module-16-Deployment]]. **13 waits on hardware; 07/08 on the dataset** — Module 09 was built
+ahead of both against a deterministic `StubClassifier`, so neither blocks the *code*: 07/08 are a
+weights swap behind the `StageClassifier` protocol, and `gv-evaluate` already reports exactly
+which of its artifacts are waiting on them, by name, every time it runs.
 
 > Small things worth clearing before the defense: **Q14** (notification endpoints - rows are
-> being written and never shown) and **Q13** (feed owner/thumbnail, search locations).
-After 12: 15 (testing/evaluation), 16 (deployment). 13 waits on hardware; 07/08 on the dataset. Module 09 was built ahead of 07/08 against a deterministic `StubClassifier`, which
-means **the dataset no longer blocks the code** — 07 and 08 became a weights swap behind the
-`StageClassifier` protocol rather than an integration. Four to five modules of work are
-available without a single labelled image (10 → 11 → 14 → 12).
+> being written and never shown) and **Q13** (feed owner/thumbnail, search locations). ~~Q17~~
+> closed 2026-08-18 — a full run against live Postgres/Redis/MinIO measured 81.00%; the
+> threshold is set to 78.
+
+> ⚠ **2026-08-18 domain rescope — read before touching Module 07, 08, or 09 code.** The
+> classifier narrows from 10 fine classes to 4 macro-aligned ones, YOLO's object list is
+> redefined, and detection becomes a direct progress input instead of an advisory
+> corroboration signal. See [[ADR-Index#ADR-036|ADR-036]], [[ADR-Index#ADR-037|ADR-037]], and
+> **[[Open-Questions|Q18]] — the fused progress formula, which blocks the actual code change**.
+> `dataset/raw/`'s existing Foundation/Structural/Roofing/Finishing folders already match the
+> new class list, which is good news: no relabeling needed at the macro level.
 
 > ⚠ **Fix Q12 before Module 12.** `get_session` commits *after* the response is sent
 > (measured 6.9 ms), so a real browser that creates a project and immediately navigates to it
@@ -83,8 +95,8 @@ path of the thesis.**
 
 | # | Task | Lead time | Why now |
 |---|---|---|---|
-| P1-1 | **Order hardware** — ESP32-CAM (AI-Thinker, +1 spare), NEO-6M GPS, DS3231 RTC, microSD 32 GB, FTDI/CP2102 programmer, IP65 enclosure, power bank | 1–4 weeks shipping | Nothing accelerates delivery. A dead-on-arrival board with no spare costs another full cycle. BOM: [[ESP32-CAM-Node]] |
-| P1-2 | **Secure a real construction site + written permission** | days–weeks of asking | Real captures over real weeks are what make this a thesis rather than a demo. Also covers you for publishing the images. (Q3) |
+| P1-1 | ~~Order hardware~~ **ESP32-CAM ordered.** | shipping in transit | ◑ **in progress, 2026-08-18.** Confirm a spare board and the rest of the BOM (GPS, DS3231, microSD, programmer, enclosure) shipped too — [[ESP32-CAM-Node]] — and start [[Hardware-Test-Log]] the moment it arrives. |
+| P1-2 | ~~Secure a real construction site + written permission~~ | site ready in ~3–4 weeks | ✅ **done, 2026-08-18.** Site identified and permit in hand (Q3 closed). Use the remaining weeks to finish [[Module-16-Deployment]] and rehearse pairing (P2-9) so the camera goes up the day the site is ready. |
 | P1-3 | **Start dataset collection** — target ≥ 1 500 images, ≥ 150/class | weeks | Highest-yield source: construction time-lapse videos on YouTube (one video can cover all 10 stages of one building). Record source URLs + licences as you go. [[Dataset-Spec]] |
 | P1-4 | **Set up CVAT and start annotating** | ongoing | Annotation is slow and cannot be rushed at the end. [[Annotation-Guide]] |
 | P1-5 | **Get the stage percentages reviewed** by a civil engineer / project manager (Q1) | days–weeks to schedule | Every progress number in the system rests on this table. A cited expert review turns an assumption into a defensible methodology choice. [[Construction-Stages]] |
@@ -133,15 +145,15 @@ Authoritative board: [[Build-Order]].
 | 04 | Projects & Folders | ✅ done | — |
 | 05 | Device Pairing & Ingestion | ✅ done | — |
 | 06 | AI Preprocessing | ✅ done | — |
-| 07 | Classifier Training | ⏸ blocked | **P1-3, P1-4** (dataset). Now a weights swap, not an integration. |
-| 08 | YOLO Detection | ⏸ blocked | P1-3, P1-4 |
-| 09 | Inference & Progress | ✅ done | — *built early against a `StubClassifier`, which unblocked 10–14* |
+| 07 | Classifier Training | ⏸ blocked | **P1-3, P1-4** (dataset) + **Q18** (fusion formula, 2026-08-18 rescope — [[ADR-Index#ADR-036\|ADR-036]]). Scope narrowed to 4 classes; not yet a weights swap until Q18 lands. |
+| 08 | YOLO Detection | ⏸ blocked | P1-3, P1-4 + **Q18**. Class list redefined 2026-08-18 ([[ADR-Index#ADR-036\|ADR-036]]) — detection is no longer advisory-only. |
+| 09 | Inference & Progress | ✅ done, **rework pending Q18** | — *built early against a `StubClassifier`, which unblocked 10–14; §1/§5 of the algorithm are marked superseded until [[Open-Questions\|Q18]] resolves* |
 | 10 | Reports & Remarks | ✅ done | — |
 | 11 | Public Dashboard | ✅ done | — |
 | 12 | Owner Dashboard | ✅ done | - |
-| 13 | Firmware | pending | **P1-1** (hardware) |
+| 13 | Firmware | pending | **P1-1** (hardware — ordered, in transit) |
 | 14 | Realtime | ✅ done | — |
-| 15 | Testing & Evaluation | pending | all |
+| 15 | Testing & Evaluation | ◑ in progress | classifier/detector figures need P1-3/P1-4; hardware log needs P1-1 |
 | 16 | Deployment | pending | all + **P0-3** |
 
 ---
@@ -153,13 +165,13 @@ Unresolved questions, from [[Open-Questions]]. Each one blocks or reshapes work:
 | | Question | Priority |
 |---|---|---|
 | Q1 | Are the stage percentages realistic? | **P1** |
-| Q3 | Which site, with whose permission? | **P1** |
 | Q5 | How many labelled images can you realistically get? | **P1** |
 | Q7 | GPU for training? | P1 |
 | Q2 | Exact ESP32 pinout for your board | P2 |
 | Q4 | Where does the server run? | P2 |
 | Q10 | Where do checkpoints live? | P2 |
 | Q13 | Feed owner/thumbnail + search locations | P2 — before the demo |
+| Q18 | Fused progress formula (classifier + YOLO + physical change) undecided | **P1 — blocks Module 07/08/09 rework** |
 | Q11 | Superseding predictions needs a migration | P3 |
 | Q8 | Panel documentation format | P2 |
 | Q6 | Timezone / window policy | assumed daily, `Asia/Manila` |
@@ -171,8 +183,10 @@ Unresolved questions, from [[Open-Questions]]. Each one blocks or reshapes work:
 Full register in [[Open-Questions]] §4. The three most likely to hurt:
 
 1. **Not enough training data** → start P1-3 today; time-lapse frames are the highest-yield source.
-2. **Hardware arrives late or dead** → P1-1 today, buy a spare, build against `scripts/simulate_device.py` meanwhile.
-3. **Site access falls through** → line up a backup site now, not when the first one says no.
+2. **Hardware arrives late or dead** → ordered (P1-1); confirm a spare shipped, and keep building
+   against `scripts/simulate_device.py` until it arrives.
+3. ~~**Site access falls through**~~ → resolved: site identified, permit in hand (Q3). Residual
+   risk is now purely the ~3–4 week wait — use it for Module 16 and pairing rehearsal (P2-9).
 
 ---
 

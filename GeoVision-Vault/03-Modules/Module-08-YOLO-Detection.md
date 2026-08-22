@@ -3,7 +3,7 @@ title: Module 08 — YOLOv8 Object Detection
 type: module
 module: 8
 status: planned
-updated: 2026-08-12
+updated: 2026-08-18
 ---
 
 # Module 08 — YOLOv8 Detection (comparison & corroboration model)
@@ -13,7 +13,14 @@ Train and serve a YOLOv8 detector for construction objects, and use it to **corr
 classifier rather than sit beside it decoratively.
 
 ## Classes (indices frozen in `data.yaml`)
-`0 column · 1 wall · 2 roof · 3 steel_bar · 4 scaffolding · 5 worker · 6 equipment`
+
+> **Revised 2026-08-18 ([[ADR-Index#ADR-036|ADR-036]]).** Replaces the list below. New list:
+> `wall (CHB wall) · beam · column · rebar · roofing · window · door · tile · railing ·
+> lighting` (10 classes). Site-activity objects (`worker`, `equipment`, generic `scaffolding`)
+> are dropped — detection now exists to carry the structural/finishing element signal the
+> retired 10-class classifier used to provide, not to describe site activity.
+
+~~`0 column · 1 wall · 2 roof · 3 steel_bar · 4 scaffolding · 5 worker · 6 equipment`~~ (retired)
 
 ## Deliverables
 - `dataset/labels/detection/data.yaml` — paths + class names.
@@ -26,8 +33,18 @@ classifier rather than sit beside it decoratively.
 - `ai/progress/corroboration.py` — **the interesting part**: rule-based stage inference from
   object counts, compared against the classifier.
 
-## Corroboration rules (heuristic, documented as such)
+## Corroboration rules — retired design, superseded by Q18
+
+> **Superseded 2026-08-18 ([[ADR-Index#ADR-036|ADR-036]]).** The rules below and "classifier
+> remains authoritative" principle describe the pre-2026-08-18 design and are kept only as a
+> reference for what "corroboration" used to mean. Detection is no longer advisory-only: it's
+> a direct input to the progress calculator. The actual fusion formula — how classifier class
+> + detections + physical change combine into a single `raw_pct` — is **undecided**, tracked
+> as [[Open-Questions|Q18]]. `ai/progress/corroboration.py` has not been written against
+> either design yet.
+
 ```python
+# retired — old class names (steel_bar, scaffolding) no longer exist post-ADR-036
 def stage_from_detections(counts: dict[str, int]) -> MacroStage | None:
     if counts["roof"] >= 1 and counts["scaffolding"] == 0:  return FINISHING
     if counts["roof"] >= 1:                                  return ROOFING
@@ -36,12 +53,12 @@ def stage_from_detections(counts: dict[str, int]) -> MacroStage | None:
     return None            # not enough evidence — abstain, don't guess
 ```
 Output per image: `agreement ∈ {agree, disagree, abstain}`. Aggregate agreement rate goes in
-the results chapter ([[Evaluation-Plan]] §3).
+the results chapter ([[Evaluation-Plan]] §3) — this evaluation still makes sense to keep
+*alongside* whatever the fused calculator becomes, as an independent sanity check.
 
-**The classifier remains authoritative for progress.** Detection results are stored, shown,
+~~**The classifier remains authoritative for progress.** Detection results are stored, shown,
 and reported, but a disagreement only raises a `low_confidence`/review flag — it never
-overrides the progress number. Two models silently fighting over one number is a bug, not a
-feature; state this design choice explicitly.
+overrides the progress number.~~ **No longer true** — see the superseded note above.
 
 ## Training recipe
 | Setting | Value |
@@ -60,8 +77,8 @@ feature; state this design choice explicitly.
 ## Critical implementation notes
 - Annotate detection on the **same images** used for classification so the two are comparable.
 - Non-max suppression: `conf=0.35`, `iou=0.45` for serving (tune on the val set; record it).
-- `workers` and `equipment` are volatile between frames — do not let their counts influence
-  progress; they are for the "site activity" panel and the reports.
+- `worker`/`equipment` are no longer detection classes at all (dropped by ADR-036) — the
+  "site activity" panel and reports lose that signal unless it's reintroduced separately.
 - Store normalized `xywh` in `detections` so boxes render on any thumbnail size.
 - Cap stored detections at 50/image (a crowded frame shouldn't bloat the DB).
 - Detection runs **after** classification in the worker; if YOLO fails, the prediction still
