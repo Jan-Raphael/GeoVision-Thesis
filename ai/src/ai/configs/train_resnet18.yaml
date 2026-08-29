@@ -1,0 +1,21 @@
+# Module 07 training recipe for ResNet18 — see Module-07-Classifier-Training.md.
+# CLI flags (--epochs, --device, ...) override these; this file is the checked-in default.
+#
+# Paths are relative to `ai/` (this project's `uv run` working directory per CLAUDE.md Rule 2b:
+# "Run commands as `uv run <cmd>` from `backend/` or `ai/`"), not the repo root.
+
+processed_root: ../dataset/processed
+run_root: ../outputs/runs
+epochs: 60
+frozen_epochs: 3
+batch_size: 32
+lr_head: 3.0e-4
+lr_backbone: 3.0e-5
+weight_decay: 1.0e-4
+label_smoothing: 0.05
+patience: 10
+lr_patience: 4
+lr_factor: 0.5
+device: auto
+seed: 42
+num_workers: 0
