@@ -200,15 +200,30 @@ async def upload_capture(
     *,
     jitter_gps: bool,
     captured_at: datetime | None = None,
+    gps: tuple[float, float] | None = None,
 ) -> bool:
-    """Upload one image. Returns whether the server accepted it."""
+    """Upload one image. Returns whether the server accepted it.
+
+    Args:
+        client: The HTTP client to send through.
+        identity: The paired device signing the request.
+        image_path: The JPEG file to upload.
+        faults: Deliberate misbehaviour to apply, or a fresh ``Faults()`` for none.
+        jitter_gps: Wander the GPS fix slightly, simulating a consumer receiver
+            reading a fixed point repeatedly. Ignored when *gps* is given.
+        captured_at: Backdate the capture timestamp; defaults to now.
+        gps: Override for ``(latitude, longitude)``. Defaults to the seeded
+            Naga City coordinates when omitted — used by
+            ``capture_and_upload.py`` to pass a photo's real EXIF location
+            instead of pretending every capture happened at the same spot.
+    """
     # Off the event loop: a multi-megabyte read would otherwise stall every
     # other simulated camera running in the same process.
     image_bytes = await asyncio.to_thread(image_path.read_bytes)
     now = datetime.now(UTC)
     captured = captured_at or now
 
-    latitude, longitude = DEFAULT_LAT, DEFAULT_LON
+    latitude, longitude = gps or (DEFAULT_LAT, DEFAULT_LON)
     if jitter_gps:
         # A real GPS fix wanders by a few metres between reads; ~1e-5 degrees
         # is about a metre, which is the right order for consumer hardware.
