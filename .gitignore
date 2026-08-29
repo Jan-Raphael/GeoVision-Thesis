@@ -107,13 +107,21 @@ models/**
 dataset/raw/**
 dataset/processed/**
 dataset/augmented/**
-dataset/labels/**
+dataset/labels/*
 !dataset/**/.gitkeep
 
-# ...but the small CSVs that define the dataset ARE tracked, because every
-# number in the thesis must be reproducible from them.
+# ...but the small CSVs/config that define the dataset ARE tracked, because
+# every number in the thesis must be reproducible from them.
 !dataset/metadata/
 !dataset/metadata/*.csv
+# `dataset/labels/*` above already excludes this directory's contents, which
+# is what makes the file negation below possible at all: `!dir/file` cannot
+# re-include a file whose *parent directory* was excluded via a recursive
+# `dir/**` pattern (git re-checks a negated path only if something can still
+# see inside its parent) — that silently broke this exact line for as long as
+# the parent exclusion above used `dataset/labels/**` instead of `**/*`.
+!dataset/labels/detection/
+dataset/labels/detection/**
 !dataset/labels/detection/data.yaml
 
 # --- Local object storage / database volumes ------------------------------
