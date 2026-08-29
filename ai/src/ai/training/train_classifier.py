@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 
-from ai.training.trainer import TrainingConfig, train
+from ai.training.trainer import SUPPORTED_ARCHITECTURES, TrainingConfig, train
 
 __all__ = ["main"]
 
@@ -24,6 +24,7 @@ __all__ = ["main"]
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--arch", default=None, choices=SUPPORTED_ARCHITECTURES)
     parser.add_argument("--run-id", default=None, help="Defaults to a UTC timestamp")
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--device", default=None, choices=["auto", "cuda", "cpu"])
@@ -43,12 +44,14 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
 
     document = yaml.safe_load(args.config.read_text(encoding="utf-8"))
-    run_id = args.run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-resnet18"
+    arch = args.arch or document.get("arch", "resnet18")
+    run_id = args.run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + f"-{arch}"
     run_root = Path(document.get("run_root", "outputs/runs"))
 
     config = TrainingConfig(
         processed_root=Path(document["processed_root"]),
         run_dir=run_root / run_id,
+        arch=arch,
         epochs=args.epochs or document.get("epochs", 60),
         frozen_epochs=document.get("frozen_epochs", 3),
         batch_size=document.get("batch_size", 32),

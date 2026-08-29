@@ -22,7 +22,9 @@ from ai.evaluation.run_all import (
     _worked_example_series,
     main,
 )
+from ai.models.resnet18 import ResNet18Classifier, build_resnet18
 from ai.models.stub import StubClassifier, StubDetector
+from ai.progress.mapping import class_names
 
 # The exact `displayed_pct` sequence from Progress-Calculation.md §8's worked
 # example — Project NG_00, two cameras, six days, ratchet holding on day 6.
@@ -63,13 +65,30 @@ class TestResolveClassifier:
         with pytest.raises(FileNotFoundError):
             _resolve_classifier(missing)
 
-    def test_an_existing_checkpoint_still_falls_back_with_a_clear_note(self, tmp_path) -> None:
-        """Module 07's loader does not exist yet — the fallback must say so, not pretend."""
+    def test_an_existing_checkpoint_loads_the_real_model(self, tmp_path) -> None:
+        """Module 07's loader exists now — a genuine checkpoint loads for real, not a stub."""
+        import torch
+
         checkpoint = tmp_path / "best.pt"
-        checkpoint.write_bytes(b"not a real checkpoint")
+        torch.save(
+            {
+                "model_state": build_resnet18(len(class_names()), pretrained=False).state_dict(),
+                "class_names": class_names(),
+                "input_size": 224,
+                "preprocessing_fingerprint": "test-fingerprint",
+            },
+            checkpoint,
+        )
         model, note = _resolve_classifier(checkpoint)
-        assert isinstance(model, StubClassifier)
-        assert "Module 07" in note
+        assert isinstance(model, ResNet18Classifier)
+        assert "resnet18" in note
+
+    def test_a_malformed_checkpoint_raises_rather_than_silently_falling_back(self, tmp_path) -> None:
+        """An unreadable file must fail loudly — a stub fallback here would report a fake result."""
+        checkpoint = tmp_path / "garbage.pt"
+        checkpoint.write_bytes(b"not a real checkpoint")
+        with pytest.raises(Exception):  # noqa: B017 - torch.load's own error on bad content
+            _resolve_classifier(checkpoint)
 
 
 class TestResolveDetector:
@@ -149,6 +168,21 @@ class TestLoadLabeledDirectory:
         (tmp_path / "not_a_real_stage").mkdir()
         rows = _load_labeled_directory(tmp_path, StubClassifier())
         assert rows == []
+
+    def test_png_images_are_read_too(self, tmp_path) -> None:
+        """One of this project's own raw sources ships PNGs, not JPEGs (found running
+        `gv-evaluate` for real against `dataset/processed/test/`, which is 100% PNG —
+        a jpg/jpeg-only glob silently evaluated on zero images there)."""
+        target = tmp_path / "roofing"
+        target.mkdir(parents=True)
+        rng = np.random.default_rng(11)
+        image = rng.integers(60, 200, size=(64, 64, 3), dtype=np.uint8)
+        ok, buffer = cv2.imencode(".png", image)
+        assert ok
+        (target / "img0.png").write_bytes(bytes(buffer))
+
+        rows = _load_labeled_directory(tmp_path, StubClassifier())
+        assert len(rows) == 1
 
     def test_main_produces_real_classifier_metrics_given_a_test_split(self, tmp_path) -> None:
         split_dir = tmp_path / "split"

@@ -1,4 +1,8 @@
-"""The ResNet18 training loop — AMP, freeze/unfreeze, LR scheduling, early stopping, resume.
+"""The classifier training loop — AMP, freeze/unfreeze, LR scheduling, early stopping, resume.
+
+Shared by both backbones Module 07 calls for (ResNet18, the primary model; MobileNetV3, the
+comparison) — `_ARCHITECTURES` is the one place that knows how to build each and where its
+classification head lives, so the loop itself never branches on architecture.
 
 Selection is by **macro-F1**, never accuracy: the classes are unevenly represented (see
 `Dataset-Spec.md`), and accuracy alone rewards a model that just always predicts the majority
@@ -13,8 +17,10 @@ import dataclasses
 import json
 import logging
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import torch
@@ -25,14 +31,40 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
 from ai.data.datamodule import Dataloaders, build_dataloaders
-from ai.models.resnet18 import build_resnet18, freeze_backbone, unfreeze_all
+from ai.models.common import freeze_backbone, unfreeze_all
 from ai.preprocessing.pipeline import PreprocessingPipeline
 from ai.progress.mapping import class_names
 from ai.training.callbacks import CSVLogger, EarlyStopping, ModelCheckpoint
 
-__all__ = ["TrainingConfig", "TrainingResult", "train"]
+__all__ = ["SUPPORTED_ARCHITECTURES", "TrainingConfig", "TrainingResult", "train"]
 
 logger = logging.getLogger(__name__)
+
+
+class _ArchSpec(NamedTuple):
+    build: Callable[..., nn.Module]
+    head_prefix: str
+
+
+def _resnet18_spec() -> _ArchSpec:
+    from ai.models.resnet18 import HEAD_PREFIX, build_resnet18
+
+    return _ArchSpec(build_resnet18, HEAD_PREFIX)
+
+
+def _mobilenetv3_spec() -> _ArchSpec:
+    from ai.models.mobilenetv3 import HEAD_PREFIX, build_mobilenetv3
+
+    return _ArchSpec(build_mobilenetv3, HEAD_PREFIX)
+
+
+#: Lazily imported (each pulls in its own torchvision constructor) so training one
+#: architecture never has to import the other's.
+_ARCHITECTURES: dict[str, Callable[[], _ArchSpec]] = {
+    "resnet18": _resnet18_spec,
+    "mobilenetv3": _mobilenetv3_spec,
+}
+SUPPORTED_ARCHITECTURES = tuple(_ARCHITECTURES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +73,7 @@ class TrainingConfig:
 
     processed_root: Path
     run_dir: Path
+    arch: str = "resnet18"
     epochs: int = 60
     frozen_epochs: int = 3
     batch_size: int = 32
@@ -154,9 +187,14 @@ def train(config: TrainingConfig) -> TrainingResult:
     Writes `outputs/runs/<run_id>/{config.json,metrics.csv,best.pt,last.pt,confusion_matrix.json}`
     as it goes, so a crash mid-run still leaves every epoch trained so far inspectable.
     """
+    if config.arch not in _ARCHITECTURES:
+        msg = f"arch must be one of {SUPPORTED_ARCHITECTURES}, got {config.arch!r}"
+        raise ValueError(msg)
+    arch_spec = _ARCHITECTURES[config.arch]()
+
     _set_seed(config.seed)
     device = _resolve_device(config.device)
-    logger.info("training on device=%s", device)
+    logger.info("training %s on device=%s", config.arch, device)
 
     config.run_dir.mkdir(parents=True, exist_ok=True)
     (config.run_dir / "config.json").write_text(
@@ -171,12 +209,16 @@ def train(config: TrainingConfig) -> TrainingResult:
     classes = class_names()
     num_classes = len(classes)
 
-    model = build_resnet18(num_classes)
-    freeze_backbone(model)
+    model = arch_spec.build(num_classes)
+    freeze_backbone(model, head_prefix=arch_spec.head_prefix)
     model.to(device)
 
-    head_params = [p for name, p in model.named_parameters() if name.startswith("fc.")]
-    backbone_params = [p for name, p in model.named_parameters() if not name.startswith("fc.")]
+    head_params = [
+        p for name, p in model.named_parameters() if name.startswith(arch_spec.head_prefix)
+    ]
+    backbone_params = [
+        p for name, p in model.named_parameters() if not name.startswith(arch_spec.head_prefix)
+    ]
     optimizer = AdamW(
         [
             {"params": head_params, "lr": config.lr_head},
@@ -198,7 +240,10 @@ def train(config: TrainingConfig) -> TrainingResult:
 
     start_epoch = 0
     if config.resume and config.resume.is_file():
-        state = torch.load(config.resume, map_location=device)
+        # weights_only=False: see the matching note in ai/models/resnet18.py — this
+        # checkpoint carries plain-Python metadata alongside tensors, written by this
+        # project's own code, never an untrusted source.
+        state = torch.load(config.resume, map_location=device, weights_only=False)
         model.load_state_dict(state["model_state"])
         optimizer.load_state_dict(state["optimizer_state"])
         scheduler.load_state_dict(state["scheduler_state"])
@@ -246,6 +291,7 @@ def train(config: TrainingConfig) -> TrainingResult:
             val_macro_f1,
             {
                 "model_state": model.state_dict(),
+                "architecture": config.arch,
                 "optimizer_state": optimizer.state_dict(),
                 "scheduler_state": scheduler.state_dict(),
                 "epoch": epoch,

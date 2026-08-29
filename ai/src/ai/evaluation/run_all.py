@@ -37,7 +37,7 @@ from ai.evaluation.benchmark import (
     benchmark_detector,
     hardware_info,
 )
-from ai.evaluation.metrics import LabeledPrediction, summarize_classification
+from ai.evaluation.metrics import ClassificationReport, LabeledPrediction, summarize_classification
 from ai.evaluation.progress_eval import GroundTruthPoint, evaluate_against_ground_truth
 from ai.evaluation.report import (
     BackboneComparisonRow,
@@ -79,7 +79,7 @@ def _synthetic_images(n: int, *, seed: int, size: int = 224) -> list[Image]:
 
 
 def _resolve_classifier(checkpoint: Path | None) -> tuple[StageClassifier, str]:
-    """The real loader is Module 07's to add; this is the one function it touches.
+    """Load a trained checkpoint, or fall back to the stub when none is given.
 
     Returns ``(model, note)``. A checkpoint path that does not exist is a hard
     error — silently falling back to the stub there would let a typo in
@@ -90,36 +90,30 @@ def _resolve_classifier(checkpoint: Path | None) -> tuple[StageClassifier, str]:
     if not checkpoint.exists():
         msg = f"--classifier {checkpoint} does not exist"
         raise FileNotFoundError(msg)
-    # `ai/models/resnet18.py` — the trained-weight loader — ships with
-    # Module 07, which is blocked on the dataset (P1-3/P1-4). Until it lands,
-    # a checkpoint path is acknowledged, not silently ignored.
-    logger.warning(
-        "A checkpoint was provided (%s) but Module 07's real-model loader is "
-        "not built yet. Falling back to the stub for this run.",
-        checkpoint,
-    )
-    return StubClassifier(), f"stub (loader for {checkpoint.name} not yet implemented — Module 07)"
+
+    from ai.models.registry import load_classifier
+
+    model = load_classifier(str(checkpoint))
+    return model, f"{model.info.architecture} ({checkpoint.name})"
 
 
 def _resolve_detector(checkpoint: Path | None) -> tuple[ObjectDetector, str]:
-    """Mirrors :func:`_resolve_classifier`, for Module 08's YOLOv8 loader."""
+    """Mirrors :func:`_resolve_classifier`, for the YOLOv8 loader."""
     if checkpoint is None:
         return StubDetector(), "stub (no --detector given)"
     if not checkpoint.exists():
         msg = f"--detector {checkpoint} does not exist"
         raise FileNotFoundError(msg)
-    logger.warning(
-        "A checkpoint was provided (%s) but Module 08's real-model loader is "
-        "not built yet. Falling back to the stub for this run.",
-        checkpoint,
-    )
-    return StubDetector(), f"stub (loader for {checkpoint.name} not yet implemented — Module 08)"
+
+    from ai.models.yolov8 import YOLOv8Detector
+
+    return YOLOv8Detector(weights_path=str(checkpoint)), f"yolov8 ({checkpoint.name})"
 
 
 def _load_labeled_directory(
     directory: Path, classifier: StageClassifier
 ) -> list[tuple[int, int, float, tuple[float, ...]]]:
-    """Run the classifier over a labelled split laid out as `<class_name>/*.jpg`.
+    """Run the classifier over a labelled split laid out as `<class_name>/*`.
 
     Matches the class-folder layout `Dataset-Spec.md` defines for
     `dataset/processed/{train,validation,test}/`. Folder names are lowercase
@@ -129,6 +123,10 @@ def _load_labeled_directory(
     """
     pipeline = PreprocessingPipeline.from_config()
     rows: list[tuple[int, int, float, tuple[float, ...]]] = []
+    # `.png` too: one of this project's actual raw sources ships PNGs, not JPEGs — a
+    # jpg/jpeg-only glob here silently evaluated on zero images against that split
+    # (found running this for real against dataset/processed/test/, which is 100% PNG).
+    suffixes = (".jpg", ".jpeg", ".png")
 
     for class_dir in sorted(p for p in directory.iterdir() if p.is_dir()):
         try:
@@ -137,7 +135,10 @@ def _load_labeled_directory(
             logger.warning("Skipping %s: not a known construction-stage class", class_dir.name)
             continue
 
-        for image_path in sorted(class_dir.glob("*.jpg")) + sorted(class_dir.glob("*.jpeg")):
+        images = sorted(
+            p for p in class_dir.iterdir() if p.is_file() and p.suffix.casefold() in suffixes
+        )
+        for image_path in images:
             processed = pipeline.run(load_image(image_path)).image
             prediction = classifier.predict(processed)
             probabilities = tuple(prediction.probabilities.get(name, 0.0) for name in class_names())
@@ -288,13 +289,14 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("Detector:   %s", detector_note)
 
     # --- Classifier accuracy metrics (needs a labelled test split) --------
+    classifier_report: ClassificationReport | None = None
     if args.test_images is not None:
         rows = _load_labeled_directory(args.test_images, classifier)
         if rows:
             predictions = [LabeledPrediction(t, p, c, probs) for t, p, c, probs in rows]
-            report = summarize_classification(predictions, class_names())
-            write_classification_report(out_dir, report)
-            completed.append(f"classifier metrics (n={report.n}, {classifier_note})")
+            classifier_report = summarize_classification(predictions, class_names())
+            write_classification_report(out_dir, classifier_report)
+            completed.append(f"classifier metrics (n={classifier_report.n}, {classifier_note})")
         else:
             skipped.append(
                 "classifier metrics (--test-images given but contained no labelled images)"
@@ -317,8 +319,8 @@ def main(argv: list[str] | None = None) -> int:
         [
             BackboneComparisonRow(
                 model=classifier_bench.model_name,
-                top1_accuracy=None,
-                macro_f1=None,
+                top1_accuracy=classifier_report.top1_accuracy if classifier_report else None,
+                macro_f1=classifier_report.macro_f1 if classifier_report else None,
                 params=classifier_bench.params,
                 size_mb=classifier_bench.size_mb,
                 cpu_ms=classifier_bench.mean_ms if hw.cuda_available is False else None,
@@ -330,6 +332,16 @@ def main(argv: list[str] | None = None) -> int:
         skipped.append(
             "backbone comparison table (only the stub is benchmarked; needs ResNet18 + "
             "MobileNetV3 checkpoints trained under Module 07 to compare)"
+        )
+    elif classifier_report is None:
+        skipped.append(
+            "backbone comparison table's accuracy columns (real model benchmarked, but no "
+            "--test-images given — latency/size are recorded, accuracy is not)"
+        )
+    else:
+        skipped.append(
+            "backbone comparison table has only one model (ResNet18) — train MobileNetV3 "
+            "under identical conditions and pass --classifier again to add the second row"
         )
 
     # --- Detector mAP / classifier-detector agreement ----------------------
