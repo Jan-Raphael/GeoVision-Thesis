@@ -24,6 +24,11 @@ dependencies = [
     # web
     "fastapi>=0.115,<1",
     "uvicorn[standard]>=0.34,<1",
+    # Process manager for the deployed API container (Module 16): gunicorn
+    # supervises several uvicorn workers, restarting one that dies rather than
+    # taking the whole container down. `--reload` (dev) has no equivalent need
+    # for it, so `dev.ps1 api`/`make api` keep calling uvicorn directly.
+    "gunicorn>=23,<24",
     "python-multipart>=0.0.20,<1",
     "websockets>=14,<16",
     # settings & validation
@@ -55,6 +60,18 @@ dependencies = [
 [project.optional-dependencies]
 # Installed only in the Celery worker image. `geovision-ai` is resolved from
 # the sibling directory via [tool.uv.sources] below.
+#
+# Deliberately NOT `geovision-ai[detect]` yet. Tried it while building Module
+# 16 (2026-08-29): `ultralytics` depends on plain `opencv-python`, which
+# installs its own `cv2` alongside this project's pinned
+# `opencv-python-headless` (ADR-012) -- same import name, two distributions,
+# install order decides which one's `.pyd`/`.so` survives. No trained
+# detector exists yet (Module 08 waits on annotation) so nothing needs
+# `ultralytics` in the worker image today; solving the opencv conflict
+# properly (likely `--no-deps` + an explicit dependency list, mirroring how
+# the Kaggle notebooks already isolate ultralytics's torch pin) is real work
+# that belongs with Module 08's rollout, not bundled into deployment
+# plumbing for a model that cannot run yet. See Open-Questions.
 worker = ["geovision-ai"]
 
 dev = [

@@ -1,0 +1,220 @@
+# GeoVision — full containerised stack (Module 16).
+#
+# Everything from docker/docker-compose.dev.yml PLUS the app itself, fronted
+# by nginx. This is what a fresh machine (a mini-PC on site, a cloud VM, or
+# your own laptop for the defense demo) runs — not what you use day to day
+# while developing, which stays docker-compose.dev.yml (services only, app
+# code hot-reloading on the host).
+#
+#   docker compose --env-file ../.env -f docker-compose.yml up -d --build
+#   (or: make deploy-up / .\dev.ps1 deploy-up, from the repo root)
+#
+# Secrets come from ../.env (generate with `python scripts/generate_secrets.py`
+# at the repo root first). A handful of settings are overridden per-service
+# below rather than left to .env, because they are facts about *this compose
+# topology* (container hostnames, port 5432 not 5433, storage backend), not
+# secrets or developer preference — .env's own values stay correct for the
+# separate host-based dev workflow.
+#
+# Migrations do NOT run automatically on container start (Module-16's own
+# warning: an auto-migrating container that crash-loops can half-apply a
+# schema). Run `make deploy-migrate` once the stack is up.
+
+name: geovision
+
+x-app-env: &app-env
+  GV_ENVIRONMENT: staging
+  GV_DEBUG: "false"
+  GV_LOG_FORMAT: json
+  GV_POSTGRES_HOST: postgres
+  GV_POSTGRES_PORT: "5432"
+  GV_REDIS_HOST: redis
+  GV_REDIS_PORT: "6379"
+  GV_S3_ENDPOINT_URL: http://minio:9000
+  GV_STORAGE_BACKEND: s3
+  # A per-process nonce set stops protecting against replay the moment a
+  # second backend/worker process exists, which this compose file always has.
+  GV_NONCE_CACHE_BACKEND: redis
+  GV_PUBLIC_BASE_URL: ${GV_DEPLOY_PUBLIC_BASE_URL:-https://localhost}
+  GV_CORS_ORIGINS: ${GV_DEPLOY_PUBLIC_BASE_URL:-https://localhost}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${GV_POSTGRES_USER:-geovision}
+      POSTGRES_PASSWORD: ${GV_POSTGRES_PASSWORD:?set GV_POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${GV_POSTGRES_DB:-geovision}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GV_POSTGRES_USER:-geovision} -d ${GV_POSTGRES_DB:-geovision}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --save 60 1
+      --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${GV_S3_ACCESS_KEY:-geovision}
+      MINIO_ROOT_PASSWORD: ${GV_S3_SECRET_KEY:?set GV_S3_SECRET_KEY in .env}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-11-21T17-21-54Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      BUCKET: ${GV_S3_BUCKET:-geovision}
+      ACCESS_KEY: ${GV_S3_ACCESS_KEY:-geovision}
+      SECRET_KEY: ${GV_S3_SECRET_KEY:?set GV_S3_SECRET_KEY in .env}
+    entrypoint: >
+      /bin/sh -c "
+      set -e;
+      mc alias set local http://minio:9000 $${ACCESS_KEY} $${SECRET_KEY};
+      mc mb --ignore-existing local/$${BUCKET};
+      mc anonymous set none local/$${BUCKET};
+      echo 'bucket ready:' $${BUCKET};
+      "
+    restart: "no"
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/worker.Dockerfile
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      <<: *app-env
+    volumes:
+      # Real checkpoints are git-ignored and too large to bake into the image
+      # for every rebuild (Module-16's own note: "mounted as a volume or baked
+      # in deliberately, document which"). Read-only — the worker only ever
+      # loads weights, never writes them.
+      - ../backend/models:/app/backend/models:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.worker.celery_app", "inspect", "ping", "-t", "5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  beat:
+    # Same image as the API, not the worker: beat only ever publishes
+    # scheduled tasks onto the broker, it never executes an inference task
+    # body, so it never touches torch (app/worker/celery_app.py imports the
+    # task modules eagerly, but each one only imports `ai` lazily inside its
+    # own task function - verified while building this compose file).
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      <<: *app-env
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "-l", "info"]
+    # The backend image's HEALTHCHECK probes :8000/health over HTTP -
+    # meaningless here since beat's command never starts that server. Nothing
+    # depends on beat being "healthy" (only backend/worker are depended on),
+    # so disabling is correct rather than inventing a fragile substitute
+    # (found running this compose file for real: beat sat at "unhealthy"
+    # forever otherwise, which reads as a real problem in `docker compose ps`
+    # when there isn't one).
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: ../docker/dashboard.Dockerfile
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      dashboard:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    name: geovision_prod_postgres_data
+  redis_data:
+    name: geovision_prod_redis_data
+  minio_data:
+    name: geovision_prod_minio_data

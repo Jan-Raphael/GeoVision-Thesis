@@ -15,7 +15,9 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [string]$Task = 'help'
+    [string]$Task = 'help',
+    # Only used by deploy-restore: .\dev.ps1 deploy-restore -Dir backups\20260829T120000Z
+    [string]$Dir = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,6 +26,10 @@ $Root = $PSScriptRoot
 # compose file's directory (docker/), so without it the repo-root .env is never
 # read and every ${GV_*:?} variable fails the stack at startup.
 $Compose = @('compose', '--env-file', "$Root/.env", '-f', "$Root/docker/docker-compose.dev.yml")
+# Module 16's full containerised stack — a separate compose file and a
+# separate `deploy-` prefix on every task, deliberately not more `up`/`down`
+# names. See the Makefile's DEPLOY_COMPOSE comment for why.
+$DeployCompose = @('compose', '--env-file', "$Root/.env", '-f', "$Root/docker/docker-compose.yml")
 
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "  OK $msg" -ForegroundColor Green }
@@ -86,8 +92,19 @@ switch ($Task.ToLower()) {
             @('docs', 'openapi + erd together'),
             @('check', 'Everything CI runs, locally'),
             @('clean', 'Remove caches and build artifacts'),
-            @('nuke', 'Stop stack AND DELETE ALL DEV DATA')
-        ) | ForEach-Object { '  {0,-12} {1}' -f $_[0], $_[1] }
+            @('nuke', 'Stop stack AND DELETE ALL DEV DATA'),
+            @('deploy-tls', 'Generate a free self-signed TLS cert for local/demo use'),
+            @('deploy-build', 'Build the backend/worker/dashboard images'),
+            @('deploy-up', 'Bring up the full containerised stack (build if needed)'),
+            @('deploy-down', 'Stop the deployed stack (keeps volumes)'),
+            @('deploy-ps', 'Show deployed stack status'),
+            @('deploy-logs', 'Tail deployed stack logs'),
+            @('deploy-migrate', 'Apply Alembic migrations inside the deployed backend image'),
+            @('deploy-seed', 'Load seed data inside the deployed backend image'),
+            @('deploy-backup', 'Dump postgres + mirror minio to .\backups\<timestamp>\'),
+            @('deploy-restore', 'Restore a backup (pass -Dir <path>)'),
+            @('deploy-demo', 'Health-check the deployed stack and print the demo URLs')
+        ) | ForEach-Object { '  {0,-14} {1}' -f $_[0], $_[1] }
         Write-Host ''
     }
 
@@ -321,6 +338,61 @@ switch ($Task.ToLower()) {
             Write-Ok 'Volumes removed. Next: .\dev.ps1 up; .\dev.ps1 migrate'
         }
         else { Write-Host 'Aborted.' }
+    }
+
+    'deploy-tls' {
+        New-Item -ItemType Directory -Force -Path "$Root/docker/certs" | Out-Null
+        & openssl req -x509 -nodes -days 825 -newkey rsa:2048 `
+            -keyout "$Root/docker/certs/privkey.pem" -out "$Root/docker/certs/fullchain.pem" `
+            -subj "/CN=localhost" `
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+        Write-Ok 'Wrote docker/certs/{fullchain,privkey}.pem -- gitignored, self-signed, browsers will warn once.'
+    }
+
+    'deploy-build' { if (Test-Docker) { & docker @DeployCompose build } }
+
+    'deploy-up' {
+        if (-not (Test-Docker)) { exit 1 }
+        if (-not (Test-Path "$Root/docker/certs/fullchain.pem")) { & $PSCommandPath deploy-tls }
+        & docker @DeployCompose up -d --build
+        Write-Step 'Waiting for services to report healthy...'
+        & docker @DeployCompose ps
+    }
+
+    'deploy-down' { if (Test-Docker) { & docker @DeployCompose down } }
+    'deploy-ps' { if (Test-Docker) { & docker @DeployCompose ps } }
+    'deploy-logs' { if (Test-Docker) { & docker @DeployCompose logs -f } }
+
+    'deploy-migrate' {
+        # No `uv run` prefix -- the runtime image ships only the built .venv,
+        # not the uv tool itself (uv is only ever needed to BUILD the image).
+        Write-Step 'Applying migrations inside the deployed backend image'
+        & docker @DeployCompose run --rm --no-deps backend alembic upgrade head
+    }
+
+    'deploy-seed' {
+        Write-Step 'Seeding the deployed database'
+        & docker @DeployCompose run --rm --no-deps backend python -m scripts.seed_db
+    }
+
+    'deploy-backup' { & python "$Root/scripts/backup.py" }
+
+    'deploy-restore' {
+        if (-not $Dir) {
+            Write-Host 'Usage: .\dev.ps1 deploy-restore -Dir backups\20260829T120000Z' -ForegroundColor Red
+            exit 1
+        }
+        & python "$Root/scripts/restore.py" $Dir
+    }
+
+    'deploy-demo' {
+        Write-Step 'Checking every service is healthy...'
+        & docker @DeployCompose ps
+        Write-Host ''
+        Write-Ok 'Dashboard:  https://localhost'
+        Write-Ok 'Health:     https://localhost/health/ready'
+        Write-Host ''
+        Write-Host 'Walk through documentation/DEMO.md next.'
     }
 
     default {

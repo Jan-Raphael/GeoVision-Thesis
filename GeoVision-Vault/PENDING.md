@@ -2,7 +2,7 @@
 title: PENDING — master priority board
 type: index
 status: living
-updated: 2026-08-28
+updated: 2026-08-29
 ---
 
 # PENDING — what needs doing, in priority order
@@ -40,22 +40,22 @@ updated: 2026-08-28
 | ~~P0-2~~ | ~~Update Windows~~ | — | ✅ **not needed.** Build 19045 already meets Docker's minimum. |
 | ~~P0-3~~ | ~~Install Docker Desktop~~ | — | ✅ **done 2026-08-14.** Docker 29.6.2 + Compose v5.3.1, WSL data root on `F:\Docker\wsl`. Redis and MinIO containerised; PostgreSQL stays native behind a compose `db` profile. `/health/ready` returns 200 ready. |
 
-**Nothing is blocking code right now.** Modules 01–06, **09–12**, and **14** are done, and the
-whole stack has been exercised end to end against live services.
+**Nothing is blocking code right now.** Modules 01–06, **09–12**, **14**, and **16** are done,
+and the whole stack has been exercised end to end against live services — including, as of
+2026-08-29, the fully containerised deployment itself (real images, real HTTPS, real trained
+checkpoint serving live through it).
 
 **In progress: [[Module-15-Testing-and-Evaluation]] (started 2026-08-18).** Everything buildable
 without hardware or a labelled dataset has shipped — `ai/evaluation/` (metrics, benchmark,
 detector eval, progress eval, the `gv-evaluate` CLI), coverage thresholds enforced in CI, the
 generalised client/server contract test, `documentation/openapi.json` + `erd.mmd` export, a
 Playwright E2E scaffold (now run for real, 12/12 passing, Q16 closed), two k6 load scripts, and
-[[Hardware-Test-Log]]. **[[Open-Questions|Q18]] resolved 2026-08-27** ([[ADR-Index#ADR-038|ADR-038]])
-— the fused progress formula is implemented, tested, and wired into the worker. **Next up:** a
-local coverage run against live services (Q17), the manual phone/webcam capture tool (Q2), Kaggle
-training notebooks (Q7), then [[Module-16-Deployment]]. **13 waits on hardware; 07/08 on the
-dataset (specifically Foundation-class volume, Q5) and YOLO annotation** — Module 09 was built
-ahead of both against a deterministic `StubClassifier`, so neither blocks the *code*: 07/08 are a
-weights swap behind the `StageClassifier` protocol, and `gv-evaluate` already reports exactly
-which of its artifacts are waiting on them, by name, every time it runs.
+[[Hardware-Test-Log]]. **13 waits on hardware; 07/08 on the dataset (specifically
+Foundation-class volume, Q5) and YOLO annotation** — Module 09 was built ahead of both against a
+deterministic `StubClassifier`, so neither blocks the *code*: 07 has already swapped in a real
+ResNet18 checkpoint (2026-08-29, both training and live serving), 08 is a weights swap behind the
+same `StageClassifier` protocol once annotation exists, and `gv-evaluate` already reports exactly
+which of its artifacts are still waiting, by name, every time it runs.
 
 > Small things worth clearing before the defense: **Q14** (notification endpoints - rows are
 > being written and never shown) and **Q13** (feed owner/thumbnail, search locations). ~~Q17~~
@@ -118,7 +118,7 @@ path of the thesis.**
 
 | # | Task | Owner module |
 |---|---|---|
-| P2-1 | Modules 10 → 16 built and tested | [[Build-Order]] |
+| ~~P2-1~~ | ~~Modules 10 → 16 built and tested~~ | ✅ **done 2026-08-29** — only 13 (hardware) and the dataset-dependent parts of 07/08/15 remain, see [[Build-Order]] |
 | P2-2 | Decide where trained checkpoints live (Q10) — Release assets / Drive + hash / git-lfs | [[Module-07-Classifier-Training]] |
 | P2-3 | Verify the ESP32 pinout for *your* board revision (Q2) and record it | [[ESP32-CAM-Node]] |
 | P2-4 | Decide the public server host + HTTPS endpoint for the field device (Q4) — Cloudflare Tunnel is the cheap answer | [[Module-16-Deployment]] |
@@ -153,14 +153,14 @@ Authoritative board: [[Build-Order]].
 | 06 | AI Preprocessing | ✅ done | — |
 | 07 | Classifier Training | ◑ in progress | Code shipped and run for real 2026-08-28: split script, dataset/transforms, ResNet18 model + trainer + CLI, Kaggle notebook. First real checkpoint trained — macro-F1 0.46, honestly below target due to dataset size/imbalance, not a bug. More Foundation-class images (P1-9) is the highest-leverage next step to improve it. |
 | 08 | YOLO Detection | ⏸ blocked | Code shipped 2026-08-28 (wrapper, training CLI, Kaggle notebook, placeholder `data.yaml`) — the only real blocker left is bounding-box annotation, which has not started. |
-| 09 | Inference & Progress | ✅ done, **rework pending Q18** | — *built early against a `StubClassifier`, which unblocked 10–14; §1/§5 of the algorithm are marked superseded until [[Open-Questions\|Q18]] resolves* |
+| 09 | Inference & Progress | ✅ done | — *the [[ADR-Index#ADR-038\|Q18]] formula and the real-checkpoint serving path both landed 2026-08-27/29* |
 | 10 | Reports & Remarks | ✅ done | — |
 | 11 | Public Dashboard | ✅ done | — |
 | 12 | Owner Dashboard | ✅ done | - |
 | 13 | Firmware | pending | **P1-1** (hardware — ordered, in transit) |
 | 14 | Realtime | ✅ done | — |
 | 15 | Testing & Evaluation | ◑ in progress | classifier/detector figures need P1-3/P1-4; hardware log needs P1-1 |
-| 16 | Deployment | pending | all + **P0-3** |
+| 16 | Deployment | ✅ done | — *verified end to end 2026-08-29: real stack, real checkpoint, real HTTPS* |
 
 ---
 

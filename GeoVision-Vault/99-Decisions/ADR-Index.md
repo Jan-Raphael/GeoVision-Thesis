@@ -2,7 +2,7 @@
 title: ADR Index
 type: decisions
 status: canonical
-updated: 2026-08-28
+updated: 2026-08-29
 ---
 
 # Architecture Decision Records
@@ -849,6 +849,46 @@ needed updating regardless of Q11, surfaced only once the tightened constraint c
 `MAX(created_at)` at query time — every reader would need the same window-function logic
 repeated, and a query that forgets it silently reads a stale prediction instead of failing
 loudly the way inserting a second current row now does.
+
+## ADR-040 — Module 16 deployment topology: `deploy-` task prefix, volume-mounted models, `beat` on the API image
+**Status:** Accepted · 2026-08-29
+**Context.** Building the full containerised stack surfaced three real conflicts between what
+Module-16-Deployment.md originally sketched and what Module 01's dev tooling had already built:
+1. The vault's own "how to run" example (`make up && make migrate && make seed`) reuses task
+   names the dev-stack Makefile already owns for a *different* compose file
+   (`docker/docker-compose.dev.yml` — services only, app code hot-reloading on the host).
+2. "Bakes in `models/`" (the original deliverable list) means every checkpoint swap rebuilds a
+   multi-GB image.
+3. No Dockerfile was specified for `beat` specifically — it was implicitly assumed to need the
+   same image as the worker.
+**Decision.**
+1. Every production/deployment task gets a `deploy-` prefix (`deploy-up`, `deploy-migrate`,
+   `deploy-backup`, …) against a distinct `docker/docker-compose.yml`, never reusing `up`/
+   `down`/`migrate`/`seed`, which stay pointed at the dev-only compose file. The two stacks
+   answer different questions ("is my code running with hot reload" vs "does the packaged
+   system boot on a clean machine") and sharing task names would make every invocation
+   ambiguous about which one just ran.
+2. Trained checkpoints are mounted as a **read-only volume**
+   (`../backend/models:/app/backend/models:ro`), not baked into the worker image. Swapping a
+   checkpoint becomes a file copy + `docker compose restart worker`, not an image rebuild —
+   directly enables the RUNBOOK.md "a model needs replacing" procedure without a CI/CD pipeline.
+3. `beat` runs the **same image as `backend`** (no torch), not the worker image. Verified by
+   reading `app/worker/celery_app.py`: it imports every task module eagerly to register them,
+   but each module (`inference.py`, `maintenance.py`, `reports.py`) only imports `ai`/torch
+   *inside* its task function bodies — beat, which schedules but never executes a task body,
+   never touches torch either.
+**Consequences.** Two Makefile/`dev.ps1` task namespaces to keep straight (documented in both
+files' own comments); one fewer container image to build and store (three images: `backend`
+shared by API + beat, `worker`, `dashboard` — not four); `documentation/DEPLOYMENT.md`
+explicitly documents the "volume, not baked in" choice so a future session does not
+"helpfully" bake models back into the image and reintroduce the rebuild cost.
+**Rejected.** (a) Reusing `up`/`migrate`/etc. for both stacks with a flag or env var to pick
+the compose file — rejected as a footgun: a stale shell habit (`make up`) would silently
+target whichever stack was last selected. (b) Baking checkpoints into the worker image, as
+originally sketched — rejected once the actual checkpoint size (134 MB, growing with future
+retraining) made the rebuild cost concrete rather than hypothetical. (c) A dedicated `beat`
+image — rejected as unnecessary weight once the torch-import trace showed the base image
+already suffices.
 
 ---
 

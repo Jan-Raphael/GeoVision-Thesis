@@ -26,14 +26,15 @@ and an authenticated dashboard for project owners.
 
 ## Status
 
-🟢 **12 of 16 modules shipped** — foundation, database, auth, projects, device pairing &
-ingestion, AI preprocessing, the inference/progress engine, reports, the public dashboard, the
-owner dashboard, and realtime WebSocket push are all built and tested (800+ backend tests).
-Classifier/detector training (Modules 07–08) is blocked on dataset collection; firmware
-(13), full test/eval pass (15), and one-command deployment (16) are still planned. See
+🟢 **12 of 16 modules shipped**, plus a full containerised deployment (16) on top of them —
+foundation, database, auth, projects, device pairing & ingestion, AI preprocessing, the
+inference/progress engine (now serving a real trained ResNet18, not just the stub), reports,
+the public dashboard, the owner dashboard, and realtime WebSocket push are all built and
+tested (800+ backend tests). YOLOv8 detection (Module 08) is blocked on bounding-box
+annotation; firmware (13) and the full test/eval pass (15) are still in progress. See
 [Build-Order](GeoVision-Vault/03-Modules/Build-Order.md) for the live status board. The stack
-below already runs end to end — ingest → AI inference → progress → dashboard — against the
-device simulator, with real hardware still to come.
+runs end to end — ingest → AI inference → progress → dashboard — against the device
+simulator today, with real hardware still to come.
 
 ## Stack
 
@@ -219,10 +220,24 @@ uv run python -m scripts.simulate_device --code K7M2-9XQF --images ../dataset/ra
 
 Linux/macOS/WSL: same task names via `make <task>` instead of `.\dev.ps1 <task>`.
 
-There is no containerized one-command deploy yet — that's Module 16
-([status board](GeoVision-Vault/03-Modules/Build-Order.md)), which will add a full
-`docker-compose.yml` (nginx + backend + worker + dashboard, all containerized) on top of the
-dev-only `docker/docker-compose.dev.yml` used above.
+## Deployment
+
+Everything above is the day-to-day dev workflow (hot reload, services in Docker, app code on
+the host). For the **fully containerised** stack — nginx + backend + worker + beat +
+dashboard, all in Docker, TLS included — see [documentation/DEPLOYMENT.md](documentation/DEPLOYMENT.md).
+Short version:
+
+```bash
+python scripts/generate_secrets.py
+make deploy-up && make deploy-migrate && make deploy-seed
+open https://localhost
+```
+
+Runs entirely on your own machine at zero cost (self-signed TLS by default); a public
+address for a real field camera is a separate, later, still-free step via Cloudflare
+Tunnel — see DEPLOYMENT.md. Also: [documentation/RUNBOOK.md](documentation/RUNBOOK.md)
+(what to do when something breaks) and [documentation/DEMO.md](documentation/DEMO.md) (the
+defense script, minute by minute).
 
 ## Layout
 

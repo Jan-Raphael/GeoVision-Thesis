@@ -8,7 +8,9 @@
 .DEFAULT_GOAL := help
 .PHONY: help setup env up down logs ps migrate seed dev worker beat api dashboard \
         lint fmt typecheck arch test test-unit test-integration test-ai e2e e2e-ui cov \
-        load-ingest load-read evaluate openapi erd docs check guard clean nuke
+        load-ingest load-read evaluate openapi erd docs check guard clean nuke \
+        deploy-build deploy-up deploy-down deploy-ps deploy-logs deploy-migrate \
+        deploy-seed deploy-backup deploy-restore deploy-tls deploy-demo
 
 # --env-file is required, not optional: Compose resolves `.env` relative to the
 # directory of the compose file (docker/), so without this it never finds the
@@ -16,6 +18,15 @@
 # Note we do NOT pass --project-directory, because the relative bind mount
 # ./postgres/init must keep resolving against docker/.
 COMPOSE := docker compose --env-file .env -f docker/docker-compose.dev.yml
+
+# Module 16's full containerised stack (nginx + backend + worker + beat +
+# dashboard, on top of postgres/redis/minio) — a SEPARATE compose file and a
+# separate `deploy-` prefix on every task, not more `up`/`down`/`migrate`
+# names. The two stacks answer different questions ("is my code running with
+# hot reload" vs "does the packaged system boot on a clean machine") and
+# giving them the same task names would make every `make up` ambiguous about
+# which one it started. See Progress-Log, 2026-08-29.
+DEPLOY_COMPOSE := docker compose --env-file .env -f docker/docker-compose.yml
 
 ## ---------------------------------------------------------------------------
 ## Help
@@ -170,6 +181,60 @@ check: guard lint typecheck arch ## Everything CI runs, locally
 	# --cov flag collects no coverage and enforces nothing.
 	cd backend && uv run pytest --cov=app --cov-report=term-missing
 	cd ai      && uv run pytest --cov=ai --cov-report=term-missing
+
+## ---------------------------------------------------------------------------
+## Deployment (Module 16) -- the full containerised stack, not dev
+## ---------------------------------------------------------------------------
+deploy-tls: ## Generate a free self-signed TLS cert for local/demo use (see DEPLOYMENT.md for a real domain)
+	mkdir -p docker/certs
+	openssl req -x509 -nodes -days 825 -newkey rsa:2048 \
+		-keyout docker/certs/privkey.pem -out docker/certs/fullchain.pem \
+		-subj "/CN=localhost" \
+		-addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+	@echo "Wrote docker/certs/{fullchain,privkey}.pem -- gitignored, self-signed, browsers will warn once."
+
+deploy-build: ## Build the backend/worker/dashboard images
+	$(DEPLOY_COMPOSE) build
+
+deploy-up: ## Bring up the full containerised stack (build if needed)
+	@test -f docker/certs/fullchain.pem || $(MAKE) deploy-tls
+	$(DEPLOY_COMPOSE) up -d --build
+	@echo "Waiting for services to report healthy..."
+	$(DEPLOY_COMPOSE) ps
+
+deploy-down: ## Stop the deployed stack (keeps volumes)
+	$(DEPLOY_COMPOSE) down
+
+deploy-ps: ## Show deployed stack status
+	$(DEPLOY_COMPOSE) ps
+
+deploy-logs: ## Tail deployed stack logs
+	$(DEPLOY_COMPOSE) logs -f
+
+deploy-migrate: ## Apply Alembic migrations inside the deployed backend image
+	# No `uv run` prefix: the runtime image ships only the built .venv, not the
+	# uv tool itself (found running this for real — uv is only ever needed to
+	# BUILD the image). alembic/python are already on PATH from the venv.
+	$(DEPLOY_COMPOSE) run --rm --no-deps backend alembic upgrade head
+
+deploy-seed: ## Load seed data inside the deployed backend image
+	$(DEPLOY_COMPOSE) run --rm --no-deps backend python -m scripts.seed_db
+
+deploy-backup: ## Dump postgres + mirror the minio bucket to ./backups/<timestamp>/
+	python scripts/backup.py
+
+deploy-restore: ## Restore a backup: make deploy-restore DIR=backups/20260829T120000Z
+	python scripts/restore.py $(DIR)
+
+deploy-demo: ## Health-check the deployed stack and print the defense-demo URLs
+	@echo "Checking every service is healthy..."
+	$(DEPLOY_COMPOSE) ps
+	@echo ""
+	@echo "Dashboard:  https://localhost"
+	@echo "API docs:   disabled in staging/production by design (see Settings.docs_url)"
+	@echo "Health:     https://localhost/health/ready"
+	@echo ""
+	@echo "Walk through documentation/DEMO.md next."
 
 ## ---------------------------------------------------------------------------
 ## Cleanup

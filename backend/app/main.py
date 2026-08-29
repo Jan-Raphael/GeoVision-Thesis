@@ -11,6 +11,7 @@ Run locally::
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from http import HTTPStatus
@@ -76,9 +77,17 @@ def _build_lifespan(
             settings.version,
             settings.environment,
         )
-        # Module 02+ will open the database engine here.
-        # Module 05+ will ensure the object-storage bucket exists.
-        # Module 09+ will warm the inference service in the worker (not here).
+        # get_storage()'s first call used to happen inline on whatever request
+        # touched it first - S3ObjectStorage.__init__ builds a boto3 client
+        # synchronously (loads botocore's service model from disk), which can
+        # block the event loop long enough to trip a worker timeout on a cold
+        # container. Found running Module 16's /health/ready for real against
+        # the deployed stack: the readiness probe itself was the first caller,
+        # and gunicorn SIGKILLed the worker at 30s. Warming it here, off the
+        # loop via to_thread, means no live request ever pays that cost.
+        from app.infrastructure.storage import get_storage
+
+        await asyncio.to_thread(get_storage, settings)
         subscriber = _start_realtime(settings)
         if subscriber is not None:
             await subscriber.start()

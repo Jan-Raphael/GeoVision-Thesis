@@ -1,8 +1,18 @@
 # GeoVision — docker build context exclusions
 #
-# WHY: without this, `docker build` uploads dataset/, models/, outputs/ and
-# node_modules/ into the build context — gigabytes, on every single build.
+# WHY: without this, `docker build` uploads dataset/, .venv/, node_modules/ and
+# other multi-GB local artifacts into the build context on every single build.
 # Keeping the context small is the single biggest build-speed win available.
+#
+# IMPORTANT — unlike .gitignore, a bare pattern here does NOT match at every
+# depth. Docker matches each pattern against the path relative to the context
+# root literally, so `models/` only ever matches a top-level `models/`
+# directory; `backend/models/` needs its own line, or a `**/` prefix. Found
+# the hard way building Module 16: with only the bare `models/`, `.venv/`,
+# and `node_modules/` lines below (which looked complete), the build context
+# was still 2.37 GB and took 15 minutes to transfer — backend/.venv,
+# dashboard/node_modules, and backend/models/*.pt were all still getting
+# uploaded despite each looking "already excluded."
 
 # Version control & docs
 .git/
@@ -13,36 +23,41 @@ documentation/
 *.md
 !README.md
 
-# Large data & artifacts — never needed at image build time
+# Large data & artifacts — never needed at image build time. Explicit per
+# package, not a **/models/** wildcard, because ai/src/ai/models/ is a real,
+# tracked Python package, not a weights directory — a wildcard would also
+# catch that (same reasoning as .gitignore's own models/** rules).
 dataset/
 models/
 outputs/
+backend/models/
+backend/outputs/
+ai/outputs/
 
-# Local environments
-.venv/
-venv/
-node_modules/
+# Local environments and dependency caches — these appear at any depth, so
+# they need the explicit **/ any-depth prefix (see note above).
+**/.venv/
+**/venv/
+**/node_modules/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+**/.pio/
 dashboard/dist/
-.pio/
-
-# Caches
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
 
 # Secrets — belt and braces; these must never enter an image layer
 .env
 .env.*
 !.env.example
-*.pem
-*.key
+**/*.pem
+**/*.key
 
 # Editor / OS
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
+**/.vscode/
+**/.idea/
+**/.DS_Store
+**/Thumbs.db

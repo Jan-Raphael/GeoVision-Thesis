@@ -74,17 +74,18 @@ DEV_PASSWORD_HASH = (
     "QnFTMGU0zDvdm02+HwIuw+1kD9hRjx1I2llCaIMiIVo"
 )
 
+#: The 4 macro-aligned classes (ADR-036), replacing the original 10-class
+#: scheme this table used to hold. Found stale while running Module 16's
+#: deploy-seed for the first time since the rescope (2026-08-18): the check
+#: constraint on `predictions.fine_class_index` was tightened to `0..3` by
+#: ADR-039, and this table still had `columns` at index 4 -- every seed run
+#: since the rescope would have failed the same way, just never re-run until
+#: now. Values from `ai/src/ai/configs/classes.yaml`.
 FINE_CLASSES = (
-    ("site_clearing", 0, MacroStage.FOUNDATION, Decimal("4")),
-    ("excavation", 1, MacroStage.FOUNDATION, Decimal("9")),
-    ("footings", 2, MacroStage.FOUNDATION, Decimal("14")),
-    ("foundation", 3, MacroStage.FOUNDATION, Decimal("20")),
-    ("columns", 4, MacroStage.FRAMING, Decimal("28")),
-    ("slab", 5, MacroStage.FRAMING, Decimal("34")),
-    ("walls", 6, MacroStage.FRAMING, Decimal("40")),
-    ("roof", 7, MacroStage.ROOFING, Decimal("60")),
-    ("finishing", 8, MacroStage.FINISHING, Decimal("80")),
-    ("completed", 9, MacroStage.APPROVAL, Decimal("80")),
+    ("Foundation", 0, MacroStage.FOUNDATION, Decimal("20")),
+    ("Structural", 1, MacroStage.FRAMING, Decimal("40")),
+    ("Roofing", 2, MacroStage.ROOFING, Decimal("60")),
+    ("Finishing", 3, MacroStage.FINISHING, Decimal("80")),
 )
 
 
