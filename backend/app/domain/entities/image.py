@@ -130,6 +130,10 @@ class Prediction:
     class_probabilities: dict[str, float] = field(default_factory=dict)
     inference_ms: int | None = None
     created_at: datetime | None = None
+    #: `None` means this is the current prediction for its image. Set once a
+    #: reprocess produces a newer one — history is kept, not deleted
+    #: (Open-Questions Q11, ADR-039).
+    superseded_at: datetime | None = None
 
     @property
     def is_eligible(self) -> bool:
@@ -140,6 +144,11 @@ class Prediction:
     def low_confidence(self) -> bool:
         """Whether to badge this prediction as uncertain in the UI."""
         return not self.confidence.is_eligible
+
+    @property
+    def is_current(self) -> bool:
+        """Whether this is the image's active prediction (not superseded)."""
+        return self.superseded_at is None
 
 
 @dataclass(frozen=True, slots=True)

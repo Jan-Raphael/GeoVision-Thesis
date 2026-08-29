@@ -403,10 +403,15 @@ class ImageRepository(Protocol):
 
 
 class PredictionRepository(Protocol):
-    """Classifier outputs."""
+    """Classifier outputs.
+
+    History is kept, not deleted (Open-Questions Q11, ADR-039) — every method
+    here except ``list_history_for_image`` deals in *current* (non-superseded)
+    predictions only.
+    """
 
     async def get_for_image(self, image_id: UUID) -> Prediction | None:
-        """Return the prediction for an image."""
+        """Return the current prediction for an image."""
         ...
 
     async def add(self, prediction: Prediction) -> Prediction:
@@ -414,21 +419,25 @@ class PredictionRepository(Protocol):
         ...
 
     async def list_for_images(self, image_ids: Sequence[UUID]) -> dict[UUID, Prediction]:
-        """Predictions for many images at once, keyed by image id.
+        """Current predictions for many images at once, keyed by image id.
 
         Batched so the history endpoint joins images to predictions without one
         query per row.
         """
         ...
 
-    async def delete_for_image(self, image_id: UUID) -> int:
-        """Remove an image's prediction, so reprocessing replaces it."""
+    async def list_history_for_image(self, image_id: UUID) -> tuple[Prediction, ...]:
+        """Every prediction an image has ever had, newest first — the current one at index 0."""
+        ...
+
+    async def supersede_for_image(self, image_id: UUID) -> int:
+        """Mark an image's current prediction superseded, ahead of a reprocess."""
         ...
 
     async def list_eligible_in_window(
         self, project_id: UUID, start: datetime, end: datetime
     ) -> tuple[Prediction, ...]:
-        """Confidence-passing predictions in a window, for aggregation."""
+        """Confidence-passing, current predictions in a window, for aggregation."""
         ...
 
 

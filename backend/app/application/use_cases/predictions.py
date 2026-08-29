@@ -217,13 +217,17 @@ class ReprocessImage:
         self._queue = queue
 
     async def execute(self, image_id: UUID, project_id: UUID) -> Image:
-        """Clear the old result and re-enqueue.
+        """Supersede the old result and re-enqueue.
 
-        The previous prediction and detections are **deleted** first, for two
-        reasons. The worker skips any image already marked ``inferred``, so the
-        status has to be reset for the task to do anything at all; and two
-        prediction rows for one photograph would both satisfy the aggregation
-        query, letting a single image vote twice in its own window.
+        The previous prediction is **superseded**, not deleted (Open-Questions
+        Q11, ADR-039) — its history stays answerable after a retrain. Detections
+        are still deleted: they carry no equivalent historical value on their
+        own, and the detection summary is trivially reproduced by the reprocess
+        this triggers. Either way the image's status must reset to ``pending``
+        for the worker to do anything at all — it skips anything already marked
+        ``inferred`` — and the partial-unique index on `predictions.image_id`
+        (current rows only) is what stops the new prediction from double-voting
+        alongside the one it replaces.
 
         Raises:
             NotFoundError: If the image does not exist or is not in this project.
@@ -237,7 +241,7 @@ class ReprocessImage:
             msg = "This image has not been processed yet; it is already queued."
             raise ConflictError(msg)
 
-        await self._predictions.delete_for_image(image_id)
+        await self._predictions.supersede_for_image(image_id)
         await self._detections.delete_for_image(image_id)
         reset = await self._images.update(replace(image, status=ImageStatus.PENDING))
         await self._queue.enqueue(

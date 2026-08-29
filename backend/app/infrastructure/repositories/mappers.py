@@ -244,6 +244,7 @@ def to_prediction(row: models.PredictionModel) -> Prediction:
         class_probabilities=dict(row.class_probabilities or {}),
         inference_ms=row.inference_ms,
         created_at=row.created_at,
+        superseded_at=row.superseded_at,
     )
 
 

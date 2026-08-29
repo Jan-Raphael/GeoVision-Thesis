@@ -45,12 +45,15 @@ pytestmark = pytest.mark.integration
 
 MANILA_NOON = datetime(2026, 8, 1, 4, 0, tzinfo=UTC)  # 12:00 Asia/Manila
 
-#: (token, nominal %) pairs from the canonical class table, restated here so the
-#: expected values in these tests are readable without a lookup.
-COLUMNS = (4, 28.0)
-SLAB = (5, 34.0)
-WALLS = (6, 40.0)
-COMPLETED = (9, 80.0)
+#: (class_index, nominal %) pairs. Only the nominal % drives these tests (macro
+#: stage and aggregation math both key off it, not the index) — the index just
+#: has to be a value the current 4-class `classes.yaml` (ADR-036/ADR-038)
+#: actually accepts, hence three of these sharing index 1 ("Structural") at
+#: different nominal percentages, the way one class covers 20 points of range.
+COLUMNS = (1, 28.0)
+SLAB = (1, 34.0)
+WALLS = (1, 40.0)
+COMPLETED = (3, 80.0)
 
 
 class Fixture:

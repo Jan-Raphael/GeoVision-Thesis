@@ -200,12 +200,12 @@ class Site:
                     id=uuid4(),
                     image_id=image.id,
                     model_id=self.model_id,
-                    fine_class_index=6,
-                    fine_class="walls",
+                    fine_class_index=1,
+                    fine_class="Structural",
                     confidence=Confidence.from_float(confidence),
                     macro_stage=MacroStage.FRAMING,
                     raw_progress_pct=ProgressPct.from_float(40.0),
-                    class_probabilities={"walls": confidence, "slab": 1 - confidence},
+                    class_probabilities={"Structural": confidence, "Foundation": 1 - confidence},
                     inference_ms=180,
                 )
             )
@@ -381,7 +381,7 @@ class TestImageDetail:
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["prediction"]["stage"] == "walls"
+        assert body["prediction"]["stage"] == "Structural"
         assert body["prediction"]["confidence"] == pytest.approx(0.94)
         assert body["prediction"]["is_eligible"] is True
         assert body["detections"][0]["class_name"] == "wall"
@@ -467,7 +467,7 @@ class TestHistory:
         items = response.json()["items"]
         assert len(items) == 2
         by_status = {item["status"]: item for item in items}
-        assert by_status["inferred"]["stage"] == "walls"
+        assert by_status["inferred"]["stage"] == "Structural"
         assert by_status["rejected"]["stage"] is None
 
     async def test_filters_by_status(self, client: AsyncClient, app: FastAPI, site: Site) -> None:

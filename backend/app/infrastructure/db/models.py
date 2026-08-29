@@ -550,8 +550,25 @@ class ImageModel(Base):
 
     project: Mapped[ProjectModel] = relationship(back_populates="images")
     device: Mapped[DeviceModel | None] = relationship(back_populates="images")
+    #: The *current* prediction only (`superseded_at IS NULL`) — every existing
+    #: reader (presenters, reports) expects at most one. Superseded history is
+    #: read explicitly through `PredictionRepository.list_history_for_image`,
+    #: never through this relationship (Open-Questions Q11, ADR-039).
+    #:
+    #: No `cascade="delete-orphan"` here deliberately: that cascade deletes a
+    #: child the moment it stops matching the relationship's `primaryjoin`,
+    #: which a supersede (setting `superseded_at`) would trigger immediately —
+    #: exactly the deletion Q11 exists to stop. The FK's `ondelete="CASCADE"`
+    #: still removes every prediction, current or superseded, when the image
+    #: itself is deleted; that path never goes through the ORM relationship.
     prediction: Mapped[PredictionModel | None] = relationship(
-        back_populates="image", cascade="all, delete-orphan", uselist=False
+        back_populates="image",
+        uselist=False,
+        viewonly=True,
+        primaryjoin=(
+            "and_(ImageModel.id == PredictionModel.image_id, "
+            "PredictionModel.superseded_at.is_(None))"
+        ),
     )
 
     __table_args__ = (
@@ -579,7 +596,6 @@ class PredictionModel(Base):
         PG_UUID(as_uuid=True),
         ForeignKey("images.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
     )
     model_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -604,14 +620,28 @@ class PredictionModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
+    #: NULL means "this is the current prediction for its image". Set to the
+    #: supersede time when a reprocess produces a newer one (Open-Questions Q11,
+    #: ADR-039) — history is kept rather than deleted, so "what did the old
+    #: model say?" stays answerable after a retrain.
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     image: Mapped[ImageModel] = relationship(back_populates="prediction")
 
     __table_args__ = (
         CheckConstraint("confidence BETWEEN 0 AND 1", name="confidence_range"),
         CheckConstraint("raw_progress_pct BETWEEN 0 AND 100", name="progress_range"),
-        CheckConstraint("fine_class_index BETWEEN 0 AND 9", name="fine_class_index_range"),
+        # 0..3, not 0..9: ADR-036/ADR-038 narrowed the classifier to 4 classes.
+        CheckConstraint("fine_class_index BETWEEN 0 AND 3", name="fine_class_index_range"),
         Index("ix_predictions_macro_stage", "macro_stage"),
+        # Enforces "at most one *current* prediction per image" now that history
+        # is kept — a plain UNIQUE(image_id) would forbid the second row entirely.
+        Index(
+            "uq_predictions_image_id_current",
+            "image_id",
+            unique=True,
+            postgresql_where=text("superseded_at IS NULL"),
+        ),
     )
 
 

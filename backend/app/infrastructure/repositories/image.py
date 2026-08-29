@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.domain.entities import (
@@ -263,10 +263,27 @@ class SqlAlchemyPredictionRepository:
         self._session = session
 
     async def get_for_image(self, image_id: UUID) -> Prediction | None:
-        """Return the prediction for an image."""
-        stmt = select(models.PredictionModel).where(models.PredictionModel.image_id == image_id)
+        """Return the *current* prediction for an image (never a superseded one)."""
+        stmt = select(models.PredictionModel).where(
+            models.PredictionModel.image_id == image_id,
+            models.PredictionModel.superseded_at.is_(None),
+        )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return to_prediction(row) if row else None
+
+    async def list_history_for_image(self, image_id: UUID) -> tuple[Prediction, ...]:
+        """Every prediction an image has ever had, newest first.
+
+        Answers "what did the old model say?" after a retrain (Open-Questions
+        Q11) — the current prediction is included, at index 0.
+        """
+        stmt = (
+            select(models.PredictionModel)
+            .where(models.PredictionModel.image_id == image_id)
+            .order_by(models.PredictionModel.created_at.desc())
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return tuple(to_prediction(row) for row in rows)
 
     async def add(self, prediction: Prediction) -> Prediction:
         """Store a prediction."""
@@ -300,31 +317,41 @@ class SqlAlchemyPredictionRepository:
         if not image_ids:
             return {}
         stmt = select(models.PredictionModel).where(
-            models.PredictionModel.image_id.in_(list(image_ids))
+            models.PredictionModel.image_id.in_(list(image_ids)),
+            models.PredictionModel.superseded_at.is_(None),
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return {row.image_id: to_prediction(row) for row in rows}
 
-    async def delete_for_image(self, image_id: UUID) -> int:
-        """Remove an image's prediction, for reprocessing.
+    async def supersede_for_image(self, image_id: UUID) -> int:
+        """Mark an image's current prediction superseded, ahead of a reprocess.
 
-        Reprocessing **replaces** rather than appends. Keeping both would be
-        better provenance, but two prediction rows for one photograph would both
-        satisfy ``list_eligible_in_window`` and the image would then vote twice
-        in its own aggregation window — a silent double-count that moves the
-        progress number. Superseding properly needs a column the schema does not
-        have; see ``Open-Questions.md`` Q11.
+        Reprocessing used to **delete** the previous prediction outright; now it
+        is kept and timestamped instead (Open-Questions Q11, ADR-039) — history
+        stays answerable after a retrain, and exactly one row per image can ever
+        have ``superseded_at IS NULL`` (enforced by a partial unique index, not
+        just this method), so the newly-added prediction cannot double-vote in
+        ``list_eligible_in_window`` alongside the one it replaces.
         """
-        stmt = delete(models.PredictionModel).where(models.PredictionModel.image_id == image_id)
+        stmt = (
+            update(models.PredictionModel)
+            .where(
+                models.PredictionModel.image_id == image_id,
+                models.PredictionModel.superseded_at.is_(None),
+            )
+            .values(superseded_at=func.now())
+        )
         return affected_rows(await self._session.execute(stmt))
 
     async def list_eligible_in_window(
         self, project_id: UUID, start: datetime, end: datetime
     ) -> tuple[Prediction, ...]:
-        """Confidence-passing predictions in a window, for aggregation.
+        """Confidence-passing, **current** predictions in a window, for aggregation.
 
         Joins through ``images`` because the window is defined by *capture*
-        time (device clock), not by when inference happened.
+        time (device clock), not by when inference happened. Excludes
+        superseded predictions explicitly — without it, a reprocessed image
+        would vote twice in its own aggregation window, once per row.
         """
         stmt = (
             select(models.PredictionModel)
@@ -334,6 +361,7 @@ class SqlAlchemyPredictionRepository:
                 models.ImageModel.captured_at >= start,
                 models.ImageModel.captured_at < end,
                 models.PredictionModel.is_eligible.is_(True),
+                models.PredictionModel.superseded_at.is_(None),
             )
             .order_by(models.ImageModel.captured_at)
         )
