@@ -86,10 +86,10 @@ def _result(*, rejected: bool) -> object:
         )
     return InferenceResult(
         classification=Classification(
-            class_index=6,
-            class_name="walls",
+            class_index=1,
+            class_name="Structural",
             confidence=0.94,
-            probabilities={"walls": 0.94, "footings": 0.06},
+            probabilities={"Structural": 0.94, "Foundation": 0.06},
             inference_ms=150,
         ),
         quality=QualityReport(
@@ -143,12 +143,14 @@ class TestAdHocRoundTrip:
         prediction = _to_prediction(payload)
 
         assert prediction.rejected is False
-        assert prediction.stage == "walls"
-        assert prediction.class_index == 6
+        assert prediction.stage == "Structural"
+        assert prediction.class_index == 1
         assert prediction.confidence == pytest.approx(0.94)
         # Resolved through the canonical class table in `ai`, not hard-coded.
         assert prediction.macro_stage == "framing"
-        assert prediction.progress_pct == pytest.approx(40.0)
+        # Fused (ADR-038): confidence 0.94 + 1/4 checklist items ("wall")
+        # detected -> sub_stage_fraction=(0.94+0.25)/2=0.595 -> 20+0.595*20.
+        assert prediction.progress_pct == pytest.approx(31.9)
         assert prediction.quality.passed is True
         assert prediction.quality.blur_score == pytest.approx(142.0)
         assert prediction.detections[0].class_name == "wall"

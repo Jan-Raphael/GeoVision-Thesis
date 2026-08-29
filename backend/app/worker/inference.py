@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Iterable
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -255,7 +255,11 @@ async def _process_image(task: Any, image_id: UUID) -> dict[str, Any]:
         assert classification is not None  # noqa: S101 - guarded by `rejected` above
 
         model_id = await _active_model_id(session, adapter)
-        stage = _stage_for(classification.class_index)
+        stage = _stage_for(
+            classification.class_index,
+            classification.confidence,
+            result.detections.counts,
+        )
 
         predictions = SqlAlchemyPredictionRepository(session)
         await predictions.add(
@@ -267,7 +271,7 @@ async def _process_image(task: Any, image_id: UUID) -> dict[str, Any]:
                 fine_class=classification.class_name,
                 confidence=Confidence.from_float(classification.confidence),
                 macro_stage=stage.macro,
-                raw_progress_pct=ProgressPct.from_float(stage.nominal_pct),
+                raw_progress_pct=ProgressPct.from_float(stage.raw_pct),
                 class_probabilities=dict(classification.probabilities),
                 inference_ms=result.inference_ms,
             )
@@ -289,7 +293,7 @@ async def _process_image(task: Any, image_id: UUID) -> dict[str, Any]:
                 "stage": classification.class_name,
                 "confidence": round(classification.confidence, 4),
                 "macro_stage": stage.macro.value,
-                "raw_progress_pct": stage.nominal_pct,
+                "raw_progress_pct": stage.raw_pct,
                 "low_confidence": not Confidence.from_float(classification.confidence).is_eligible,
             },
         )
@@ -398,21 +402,38 @@ async def _recompute(
 
 
 class _Stage:
-    """Nominal progress and macro stage for one class index."""
+    """Fused progress and macro stage for one classified, detected image."""
 
-    __slots__ = ("macro", "nominal_pct")
+    __slots__ = ("macro", "raw_pct")
 
-    def __init__(self, macro: MacroStage, nominal_pct: float) -> None:
+    def __init__(self, macro: MacroStage, raw_pct: float) -> None:
         self.macro = macro
-        self.nominal_pct = nominal_pct
+        self.raw_pct = raw_pct
 
 
-def _stage_for(class_index: int) -> _Stage:
-    """Resolve a class index through the canonical table in ``ai/``."""
+def _stage_for(
+    class_index: int,
+    confidence: float = 1.0,
+    detected_classes: Iterable[str] = (),
+) -> _Stage:
+    """Resolve a classification (+ its detections) into stage and progress.
+
+    ``confidence``/``detected_classes`` default to a plain ceiling lookup
+    (``confidence=1.0``, no detections) so callers that only need the macro
+    stage label — not a defensible percentage — are not forced to supply them.
+    Every call site that persists or displays a progress number passes both.
+    """
+    from ai.progress.estimator import fused_raw_pct
     from ai.progress.mapping import reference_for
 
     reference = reference_for(class_index)
-    return _Stage(MacroStage(reference.macro_stage.value), reference.nominal_progress_pct)
+    pct = fused_raw_pct(
+        class_index=class_index,
+        confidence=confidence,
+        detected_classes=detected_classes,
+        reference=reference,
+    )
+    return _Stage(MacroStage(reference.macro_stage.value), pct)
 
 
 def _with_status(image: Any, status: ImageStatus) -> Any:
@@ -572,13 +593,17 @@ def _as_adhoc_payload(result: Any, adapter: Any) -> dict[str, Any]:
     }
 
     if result.classification is not None:
-        stage = _stage_for(result.classification.class_index)
+        stage = _stage_for(
+            result.classification.class_index,
+            result.classification.confidence,
+            result.detections.counts,
+        )
         payload.update(
             stage=result.classification.class_name,
             class_index=result.classification.class_index,
             confidence=round(result.classification.confidence, 4),
             macro_stage=stage.macro.value,
-            progress_pct=stage.nominal_pct,
+            progress_pct=stage.raw_pct,
             probabilities={
                 name: round(value, 4) for name, value in result.classification.probabilities.items()
             },

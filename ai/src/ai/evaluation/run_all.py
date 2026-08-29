@@ -123,8 +123,8 @@ def _load_labeled_directory(
 
     Matches the class-folder layout `Dataset-Spec.md` defines for
     `dataset/processed/{train,validation,test}/`. Folder names are lowercase
-    snake_case (`site_clearing`); `classes.yaml` names are Title Case
-    (`Site Clearing`) — the underscore-to-space conversion here is the entire
+    snake_case (`structural`); `classes.yaml` names are Title Case
+    (`Structural`) — the underscore-to-space conversion here is the entire
     translation between the two.
     """
     pipeline = PreprocessingPipeline.from_config()
@@ -148,6 +148,17 @@ def _load_labeled_directory(
     return rows
 
 
+#: (token, confidence, detected_classes) triples reproducing the retired
+#: 10-class table's nominal values exactly under the ADR-038 fused formula —
+#: see `ai/tests/test_aggregator.py`'s identically-named fixtures, which this
+#: mirrors so the worked example stays defined in exactly one place in spirit.
+_EarlyStructural = ("STR", 0.8, ())
+_MidStructural = ("STR", 0.9, ("rebar", "beam"))
+_LateStructural = ("STR", 1.0, ("rebar", "beam", "wall", "roofing"))
+
+_Reading = tuple[str, float, tuple[str, ...]]
+
+
 def _worked_example_series() -> tuple[list[WindowResult], list[GroundTruthPoint]]:
     """Reconstruct `Progress-Calculation.md` §8's worked example.
 
@@ -158,36 +169,42 @@ def _worked_example_series() -> tuple[list[WindowResult], list[GroundTruthPoint]
     and as a standing regression check that this module's understanding of
     the aggregator matches the number already defended in the vault.
     """
-    # (day, cam_fd tokens or None for "all rejected", cam_b token)
-    plan: list[tuple[int, list[str] | None, str]] = [
-        (1, ["COL", "COL"], "COL"),
-        (2, ["SLB", "COL"], "SLB"),
-        (3, ["SLB"], "SLB"),
-        (4, None, "SLB"),
-        (5, ["WAL"], "SLB"),
-        (6, ["COL"], "WAL"),  # cam_fd occluded by a truck -> low nominal, still eligible
+    # (day, cam_fd readings or None for "all rejected", cam_b reading)
+    plan: list[tuple[int, list[_Reading] | None, _Reading]] = [
+        (1, [_EarlyStructural, _EarlyStructural], _EarlyStructural),
+        (2, [_MidStructural, _EarlyStructural], _MidStructural),
+        (3, [_MidStructural], _MidStructural),
+        (4, None, _MidStructural),
+        (5, [_LateStructural], _MidStructural),
+        (6, [_EarlyStructural], _LateStructural),  # cam_fd occluded by a truck
     ]
 
     windows: list[WindowInput] = []
     start = datetime(2026, 1, 1, tzinfo=UTC)
-    for day, fd_tokens, b_token in plan:
+    for day, fd_readings, b_reading in plan:
         images = []
         window_date = start.replace(day=day)
-        if fd_tokens:
-            for seq, token in enumerate(fd_tokens):
+        if fd_readings:
+            for seq, (token, confidence, detected) in enumerate(fd_readings):
                 ref = reference_for_name(token)
                 images.append(
                     estimate(
                         image_id=f"fd-{day}-{seq}",
                         device_id="cam_fd",
                         class_index=ref.index,
-                        confidence=0.85,
+                        confidence=confidence,
+                        detected_classes=detected,
                     )
                 )
+        b_token, b_confidence, b_detected = b_reading
         ref_b = reference_for_name(b_token)
         images.append(
             estimate(
-                image_id=f"b-{day}", device_id="cam_b", class_index=ref_b.index, confidence=0.85
+                image_id=f"b-{day}",
+                device_id="cam_b",
+                class_index=ref_b.index,
+                confidence=b_confidence,
+                detected_classes=b_detected,
             )
         )
         windows.append(

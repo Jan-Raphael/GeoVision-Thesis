@@ -43,7 +43,7 @@ from ai.progress.constants import (
     REGRESS_CONFIRMATIONS,
 )
 from ai.progress.estimator import ImageProgress
-from ai.progress.mapping import MacroStage, load_reference
+from ai.progress.mapping import MacroStage, macro_stage_bands
 
 __all__ = [
     "DeviceReading",
@@ -446,11 +446,10 @@ def _empty_first_window(window: WindowInput, ceiling_pct: float) -> WindowResult
 
 
 def _stage_bands() -> dict[MacroStage, tuple[float, float]]:
-    """Stage bands, derived from the canonical class table."""
-    bands: dict[MacroStage, tuple[float, float]] = {}
-    for reference in load_reference():
-        bands[reference.macro_stage] = (
-            reference.stage_floor_pct,
-            reference.stage_ceiling_pct,
-        )
-    return bands
+    """All five stage bands (Foundation..Approval), from ``classes.yaml``.
+
+    Deliberately **not** derived from the classifier's class table: since
+    ADR-036 no class predicts ``approval``, that band would otherwise be
+    silently missing (see :func:`ai.progress.mapping.macro_stage_bands`).
+    """
+    return macro_stage_bands()

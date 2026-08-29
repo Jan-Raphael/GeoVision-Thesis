@@ -120,7 +120,7 @@ class TestMainEndToEnd:
 def _write_test_split(root) -> None:
     """A tiny two-class labelled split, laid out the way `dataset/processed/test/` will be."""
     rng = np.random.default_rng(9)
-    for class_dir, count in (("site_clearing", 2), ("columns", 2)):
+    for class_dir, count in (("foundation", 2), ("structural", 2)):
         target = root / class_dir
         target.mkdir(parents=True)
         for index in range(count):
@@ -139,11 +139,11 @@ class TestLoadLabeledDirectory:
     def test_true_index_matches_the_folder_not_the_prediction(self, tmp_path) -> None:
         _write_test_split(tmp_path)
         rows = _load_labeled_directory(tmp_path, StubClassifier())
-        # `site_clearing` -> class index 0, `columns` -> class index 4
+        # `foundation` -> class index 0, `structural` -> class index 1
         # (Construction-Stages.md); both must appear as *true* indices
         # regardless of what the stub happened to predict.
         true_indices = {row[0] for row in rows}
-        assert true_indices == {0, 4}
+        assert true_indices == {0, 1}
 
     def test_an_unrecognised_folder_name_is_skipped_not_an_error(self, tmp_path) -> None:
         (tmp_path / "not_a_real_stage").mkdir()

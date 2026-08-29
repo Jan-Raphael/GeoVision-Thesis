@@ -6,9 +6,15 @@
 # the ones already stored in the database, which carry `fine_class_index`.
 # Adding a class requires retraining and a new model version.
 #
-# Two layers (ADR-001):
-#   * fine classes  — what the CNN predicts. 10 of them, ordinal.
-#   * macro stages  — what the dashboard shows. 5 bars, the fifth human-only.
+# Revised 2026-08-27 (ADR-038, closing Open-Questions Q18). ADR-036 (2026-08-18)
+# already narrowed Layer 1 from 10 fine classes to 4 macro-aligned ones; this
+# revision is the part ADR-036 deliberately left open — the actual formula that
+# resolves *where within* a class's 20-point band one image falls. See
+# `detection_checklists` below and `ai/progress/estimator.py`.
+#
+# Two layers (ADR-001, narrowed by ADR-036):
+#   * classes         — what the CNN predicts. 4 of them, one per macro stage.
+#   * macro stages     — what the dashboard shows. 5 bars, the fifth human-only.
 #
 # `dataset/metadata/progress_reference.csv` is GENERATED from this file by
 # `scripts/generate_progress_reference.py`. Edit here, never there.
@@ -16,13 +22,16 @@
 # Spec: GeoVision-Vault/02-Domain/Construction-Stages.md
 # ---------------------------------------------------------------------------
 
-version: 1
+version: 2
 
 # The nominal percentages are ASSUMPTIONS AWAITING EXPERT REVIEW (Open-Questions
-# Q1). Every progress number the system reports rests on this column. Before the
-# defense these must be reviewed by a civil engineer or project manager, the
-# reviewed values recorded here, and the review cited in the thesis — that is
-# what turns an assumption into a defensible methodology choice.
+# Q1). The team's own read (2026-08-27): these are not claimed to be precisely
+# realistic — they are what lets the model be trained and evaluated at all,
+# while the number that actually governs whether a project is "on schedule" is
+# derived separately from the project's contract deadline
+# (Project-Status-Rules.md's `is_behind_schedule`), not from this table. Before
+# the defense these floor/ceiling bands should still be reviewed by a civil
+# engineer or project manager and the review cited in the thesis.
 reviewed_by: null
 reviewed_on: null
 
@@ -49,59 +58,66 @@ macro_stages:
     floor_pct: 80
     ceiling_pct: 100
 
+# One class per macro stage (ADR-036). `nominal_progress_pct` is each class's
+# stage *ceiling* — used as a fallback only (an image whose detector found none
+# of its stage's checklist elements and whose classifier confidence sits at
+# exactly 0 would otherwise floor to the stage's start; in practice
+# `raw_pct = floor + sub_stage_fraction * span` from `estimator.py` is what
+# actually runs). No `Completed` class — see ADR-037.
 classes:
   - index: 0
-    name: Site Clearing
-    token: CLR
-    macro_stage: foundation
-    nominal_progress_pct: 4
-  - index: 1
-    name: Excavation
-    token: EXC
-    macro_stage: foundation
-    nominal_progress_pct: 9
-  - index: 2
-    name: Footings
-    token: FTG
-    macro_stage: foundation
-    nominal_progress_pct: 14
-  - index: 3
     name: Foundation
     token: FDN
     macro_stage: foundation
     nominal_progress_pct: 20
-  - index: 4
-    name: Columns
-    token: COL
-    macro_stage: framing
-    nominal_progress_pct: 28
-  - index: 5
-    name: Slab
-    token: SLB
-    macro_stage: framing
-    nominal_progress_pct: 34
-  - index: 6
-    name: Walls
-    token: WAL
+  - index: 1
+    name: Structural
+    token: STR
     macro_stage: framing
     nominal_progress_pct: 40
-  - index: 7
-    name: Roof
+  - index: 2
+    name: Roofing
     token: ROF
     macro_stage: roofing
     nominal_progress_pct: 60
-  - index: 8
+  - index: 3
     name: Finishing
     token: FIN
     macro_stage: finishing
     nominal_progress_pct: 80
-  # `Completed` deliberately maps to 80, NOT 100. Detecting a finished-looking
-  # building sets `awaiting_inspection` and notifies the owner; only a human
-  # awards the final 20 %. The machine ceiling is a safety property, not a
-  # limitation — no model should be the sole basis for declaring a building
-  # finished (ADR-007).
-  - index: 9
-    name: Completed
-    token: CMP
-    macro_stage: approval
-    nominal_progress_pct: 80
+
+# ---------------------------------------------------------------------------
+# Sub-stage resolution (ADR-038, closes Open-Questions Q18).
+#
+# A class only says *which* 20-point band an image falls in. Where within that
+# band is resolved by fusing two independent signals, averaged:
+#
+#   classifier_fraction = the softmax confidence of the predicted class — how
+#     strongly the image matches that stage's typical appearance, used as a
+#     proxy for how far into the stage it is.
+#   detector_fraction   = (number of this stage's checklist elements detected
+#     in the frame) / (checklist size) — YOLO's physical corroboration.
+#
+#   sub_stage_fraction = (classifier_fraction + detector_fraction) / 2
+#   raw_pct = stage_floor_pct + sub_stage_fraction * (stage_ceiling_pct - stage_floor_pct)
+#
+# Checklists are the same visual cues already recorded in
+# Construction-Stages.md's disambiguation table — the reasoning ADR-036 used to
+# choose YOLO's 10-class list in the first place. Each stage's own elements
+# measure how settled it is; one element borrowed from the *next* stage catches
+# an early transition (a window frame appearing near the end of roofing is real
+# evidence the roof is nearly done, not noise). `foundation` has only one
+# dedicated element in the 10-class list (`rebar`); `column` is borrowed from
+# structural as the early-transition signal. `finishing` has 5 discrete
+# elements and is not padded or trimmed to match the others.
+#
+# Frame-to-frame physical change (comparing consecutive captures from the same
+# device) was part of the original Q18 proposal but is explicitly deferred —
+# see Open-Questions.md §3 and ADR-038 — it needs calibration data this project
+# does not yet have, and the classifier+detector fusion above is sufficient to
+# unblock Modules 07/08/09 on its own.
+detection_checklists:
+  FDN: [rebar, column]
+  STR: [rebar, beam, wall, roofing]
+  ROF: [roofing, window, door, tile]
+  FIN: [window, door, tile, railing, lighting]

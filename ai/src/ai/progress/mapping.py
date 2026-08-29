@@ -28,7 +28,9 @@ __all__ = [
     "MacroStage",
     "StageReference",
     "class_names",
+    "detection_checklist_for",
     "load_reference",
+    "macro_stage_bands",
     "reference_for",
     "reference_for_name",
 ]
@@ -53,23 +55,17 @@ class MacroStage(StrEnum):
 
 
 class FineClass(StrEnum):
-    """The ten classes the CNN predicts, by token.
+    """The four classes the CNN predicts, by token (ADR-036).
 
-    Tokens rather than names because they are what appears in dataset filenames
-    (``GV_[PROJECT]_[STAGE]_[NUM].jpg``) and in the confusion matrix axis labels,
-    where "FTG" fits and "Footings" does not.
+    One per macro stage. Tokens rather than names because they are what appears
+    in dataset filenames (``GV_[PROJECT]_[STAGE]_[NUM].jpg``) and in the
+    confusion matrix axis labels.
     """
 
-    CLR = "CLR"
-    EXC = "EXC"
-    FTG = "FTG"
     FDN = "FDN"
-    COL = "COL"
-    SLB = "SLB"
-    WAL = "WAL"
+    STR = "STR"
     ROF = "ROF"
     FIN = "FIN"
-    CMP = "CMP"
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +145,24 @@ def load_reference(path: str | None = None) -> tuple[StageReference, ...]:
     return tuple(references)
 
 
+@lru_cache(maxsize=4)
+def _load_checklists(path: str | None = None) -> dict[FineClass, tuple[str, ...]]:
+    """Parse ``detection_checklists`` (ADR-038 / Open-Questions Q18)."""
+    config_path = Path(path) if path else CLASSES_CONFIG_PATH
+    document = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw = document.get("detection_checklists", {})
+    return {token: tuple(raw.get(token.value, ())) for token in FineClass}
+
+
+def detection_checklist_for(token: FineClass, *, path: str | None = None) -> tuple[str, ...]:
+    """Which YOLO element types corroborate progress within *token*'s stage.
+
+    Empty for a token with no checklist configured, in which case the fused
+    formula in ``estimator.py`` falls back to the classifier's confidence alone.
+    """
+    return _load_checklists(path).get(token, ())
+
+
 def reference_for(class_index: int, *, path: str | None = None) -> StageReference:
     """Look up a class by the index the model emitted.
 
@@ -185,6 +199,21 @@ def reference_for_name(name_or_token: str, *, path: str | None = None) -> StageR
 def class_names(*, path: str | None = None) -> tuple[str, ...]:
     """Class names in frozen index order, for the model head and `/model/status`."""
     return tuple(reference.name for reference in load_reference(path))
+
+
+def macro_stage_bands(*, path: str | None = None) -> dict[MacroStage, tuple[float, float]]:
+    """All five macro-stage bands, **including Approval**.
+
+    Since ADR-036 no classifier class maps to ``approval`` — nothing should
+    ever predict it (ADR-037: the owner, not the model, decides the project is
+    done). Deriving bands from :func:`load_reference` (Layer 1, the classifier
+    classes) would therefore silently drop that band. This reads the
+    ``macro_stages`` section of ``classes.yaml`` (Layer 2) directly instead,
+    which defines all five regardless of which ones a class predicts.
+    """
+    config_path = Path(path) if path else CLASSES_CONFIG_PATH
+    document = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    return _stage_bands(document, config_path)
 
 
 def _stage_bands(

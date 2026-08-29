@@ -79,12 +79,14 @@ class TestStubClassifier:
 
     def test_mass_concentrates_on_ordinal_neighbours(self, frame: Image) -> None:
         """How the real model will fail: the classes are a construction sequence,
-        so Footings/Foundation confusion is far likelier than Footings/Roof."""
-        result = StubClassifier(fixed_class_index=5).predict(frame)
+        so Foundation/Structural confusion is far likelier than Foundation/Finishing."""
+        result = StubClassifier(fixed_class_index=1).predict(frame)  # Structural
         names = class_names()
 
-        assert result.probabilities[names[4]] > result.probabilities[names[0]]
-        assert result.probabilities[names[6]] > result.probabilities[names[9]]
+        # Foundation (index 0, distance 1) beats Finishing (index 3, distance 2).
+        assert result.probabilities[names[0]] > result.probabilities[names[3]]
+        # Roofing (index 2, distance 1) beats Finishing (index 3, distance 2).
+        assert result.probabilities[names[2]] > result.probabilities[names[3]]
 
     def test_confidence_is_plausible(self, frame: Image) -> None:
         """High enough to be eligible, never a suspicious 1.0."""
@@ -93,10 +95,15 @@ class TestStubClassifier:
         assert MIN_CONFIDENCE <= result.confidence < 1.0
 
     def test_a_fixed_class_can_be_forced(self, frame: Image) -> None:
-        """How the approval flow at the ceiling gets driven in a test."""
-        result = StubClassifier(fixed_class_index=9).predict(frame)
+        """How the machine-ceiling flow gets driven in a test.
 
-        assert result.class_name == "Completed"
+        There is no ``Completed`` class anymore (ADR-036/ADR-037) — Finishing
+        (the last predictable class) is the stand-in for forcing a project
+        toward the 80% ceiling in a test.
+        """
+        result = StubClassifier(fixed_class_index=3).predict(frame)
+
+        assert result.class_name == "Finishing"
 
     def test_it_declares_itself_a_stub(self) -> None:
         """In three places, so a demo cannot be mistaken for a result."""
