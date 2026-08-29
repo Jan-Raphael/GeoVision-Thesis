@@ -295,11 +295,74 @@ class TestServiceStatus:
         assert service.status().images_processed == 2
         assert service.status().mean_latency_ms > 0
 
-    def test_real_weights_are_refused_until_modules_07_and_08(self) -> None:
-        """An honest failure, not a silent fallback to stubs.
+class TestBuildServiceRealWeights:
+    """Module 07 exists now — `use_stubs=False` loads a real checkpoint."""
 
-        Falling back would let a deployment believe it was serving a trained
-        model while reporting placeholder numbers.
-        """
-        with pytest.raises(NotImplementedError, match="Modules 07"):
+    @staticmethod
+    def _checkpoint(tmp_path, fingerprint: str | None = None) -> str:
+        import torch
+
+        from ai.models.resnet18 import build_resnet18
+
+        path = tmp_path / "best.pt"
+        torch.save(
+            {
+                "model_state": build_resnet18(len(class_names()), pretrained=False).state_dict(),
+                "class_names": class_names(),
+                "input_size": 224,
+                "preprocessing_fingerprint": fingerprint
+                or PreprocessingPipeline.from_config().fingerprint,
+            },
+            path,
+        )
+        return str(path)
+
+    def test_no_classifier_weights_raises_rather_than_silently_falling_back_to_a_stub(
+        self,
+    ) -> None:
+        """A deployment that meant to serve a real model must not quietly get stub numbers."""
+        with pytest.raises(ValueError, match="classifier_weights"):
             build_service(use_stubs=False)
+
+    def test_a_missing_classifier_checkpoint_raises(self, tmp_path) -> None:
+        with pytest.raises(FileNotFoundError):
+            build_service(use_stubs=False, classifier_weights=str(tmp_path / "missing.pt"))
+
+    def test_real_classifier_weights_load_a_real_model(self, tmp_path) -> None:
+        from ai.models.resnet18 import ResNet18Classifier
+
+        service = build_service(use_stubs=False, classifier_weights=self._checkpoint(tmp_path))
+
+        assert isinstance(service.classifier, ResNet18Classifier)
+        assert not service.status().using_stubs
+
+    def test_no_detector_weights_runs_with_no_detector_not_a_stub_one(self, tmp_path) -> None:
+        """A StubDetector here would inject fixed, made-up boxes into a real classification —
+        ADR-038's fused formula would treat them as genuine corroboration. `None` degrades the
+        formula honestly (no evidence, no credit) instead of lying to it."""
+        service = build_service(use_stubs=False, classifier_weights=self._checkpoint(tmp_path))
+
+        assert service.detector is None
+        assert service.status().detector is None
+        assert not service.status().using_stubs  # a missing detector isn't a stub detector
+
+    def test_detector_weights_load_a_real_detector(self, tmp_path, monkeypatch) -> None:
+        """Module 08 has no trained weights or ultralytics test fixtures anywhere in this repo
+        yet (blocked on annotation) — verify the wiring without actually loading YOLO."""
+        constructed: dict[str, str] = {}
+
+        class _FakeDetector:
+            def __init__(self, *, weights_path: str, device: str = "auto") -> None:
+                constructed["weights_path"] = weights_path
+
+        monkeypatch.setattr("ai.models.yolov8.YOLOv8Detector", _FakeDetector)
+        detector_path = str(tmp_path / "yolo-best.pt")
+
+        service = build_service(
+            use_stubs=False,
+            classifier_weights=self._checkpoint(tmp_path),
+            detector_weights=detector_path,
+        )
+
+        assert isinstance(service.detector, _FakeDetector)
+        assert constructed["weights_path"] == detector_path

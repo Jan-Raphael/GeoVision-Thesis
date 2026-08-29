@@ -91,9 +91,14 @@ firmware/**/*.elf
 
 # --- Machine learning artifacts -------------------------------------------
 # Checkpoints are large and are distributed out-of-band (release assets / Drive).
+# Both anchored explicitly (not **/models/**) because ai/src/ai/models/ is a real,
+# tracked Python package, not a weights directory — a wildcard would also catch that.
 models/**
 !models/.gitkeep
 !models/**/.gitkeep
+backend/models/**
+!backend/models/.gitkeep
+!backend/models/**/.gitkeep
 
 # Training runs, evaluation figures, generated reports.
 # Unanchored (no leading slash) so this also catches ai/outputs/ and

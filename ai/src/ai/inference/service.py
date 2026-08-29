@@ -207,6 +207,7 @@ def build_service(
     detector_weights: str | None = None,
     config_path: str | None = None,
     fixed_class_index: int | None = None,
+    device: str = "auto",
 ) -> InferenceService:
     """Construct the service from configuration.
 
@@ -214,36 +215,69 @@ def build_service(
         use_stubs: Use the deterministic placeholders. Default while the dataset
             is being collected; set ``GV_USE_STUB_MODELS=false`` once weights
             exist.
-        classifier_weights: Path to a trained classifier checkpoint.
-        detector_weights: Path to trained detector weights.
+        classifier_weights: Path to a trained classifier checkpoint. Required
+            when ``use_stubs`` is ``False``.
+        detector_weights: Path to trained YOLOv8 weights. Optional even with
+            ``use_stubs=False`` — Module 08 is still blocked on bounding-box
+            annotation (no trained detector exists yet), so a real classifier
+            commonly has to run with no detector at all rather than one that
+            was never trained. A ``StubDetector`` would be worse here: it
+            reports a fixed, made-up set of boxes that corresponds to nothing
+            in the frame, which would silently corrupt ADR-038's fused
+            progress formula for a real classification. ``None`` degrades that
+            formula honestly instead (no evidence, no credit) — see
+            :func:`ai.progress.estimator.fused_raw_pct`.
         config_path: Preprocessing config override.
         fixed_class_index: Stub only — always predict this class, for driving a
             specific scenario such as the approval flow at the ceiling.
+        device: ``"cuda"``, ``"cpu"``, or ``"auto"`` — passed to whichever real
+            model gets loaded. Unused with stubs.
 
     Returns:
         A service ready to :meth:`InferenceService.warm_up`.
 
     Raises:
-        NotImplementedError: If real weights are requested. Modules 07 and 08
-            produce them; until then this is an honest failure rather than a
-            silent fallback to stubs, which would let a deployment believe it was
-            serving a trained model.
+        ValueError: If ``use_stubs`` is ``False`` and no ``classifier_weights``
+            is given — an honest failure rather than a silent fallback to
+            stubs, which would let a deployment believe it was serving a
+            trained model.
+        FileNotFoundError: If a given weights path does not exist.
     """
     pipeline = PreprocessingPipeline.from_config(config_path)
 
-    if not use_stubs:
-        msg = (
-            "Real model backends arrive with Modules 07 (classifier) and 08 "
-            "(detector). Set GV_USE_STUB_MODELS=true until then."
+    if use_stubs:
+        return InferenceService(
+            classifier=StubClassifier(
+                fixed_class_index=fixed_class_index,
+                preprocessing_fingerprint=pipeline.fingerprint,
+            ),
+            detector=StubDetector(),
+            pipeline=pipeline,
         )
-        raise NotImplementedError(msg)
 
-    _ = classifier_weights, detector_weights
-    return InferenceService(
-        classifier=StubClassifier(
-            fixed_class_index=fixed_class_index,
-            preprocessing_fingerprint=pipeline.fingerprint,
-        ),
-        detector=StubDetector(),
-        pipeline=pipeline,
-    )
+    if not classifier_weights:
+        msg = (
+            "use_stubs=False requires classifier_weights (GV_CLASSIFIER_WEIGHTS) "
+            "— point it at a checkpoint written by ai/training/train_classifier.py, "
+            "or set GV_USE_STUB_MODELS=true until one exists."
+        )
+        raise ValueError(msg)
+
+    from ai.models.registry import load_classifier
+
+    classifier: StageClassifier = load_classifier(classifier_weights, device=device)
+
+    detector: ObjectDetector | None = None
+    if detector_weights:
+        from ai.models.yolov8 import YOLOv8Detector
+
+        detector = YOLOv8Detector(weights_path=detector_weights, device=device)
+    else:
+        logger.warning(
+            "no detector_weights configured; serving %s with no detector "
+            "(Module 08 waits on bounding-box annotation) — fused progress "
+            "will read confidence-only wherever a detection checklist exists",
+            classifier.info.name,
+        )
+
+    return InferenceService(classifier=classifier, detector=detector, pipeline=pipeline)

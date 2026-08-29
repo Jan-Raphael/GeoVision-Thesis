@@ -15,6 +15,7 @@ dwarf the inference it exists to perform.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -49,10 +50,28 @@ def get_inference_service(settings: Settings) -> InferenceService:
 
         _service = build_service(
             use_stubs=settings.use_stub_models,
+            classifier_weights=_resolve_weights(settings.model_dir, settings.classifier_weights),
+            detector_weights=_resolve_weights(settings.model_dir, settings.detector_weights),
             config_path=None,
+            device=settings.inference_device,
         )
         _service.warm_up()
     return _service
+
+
+def _resolve_weights(model_dir: Path, weights: str) -> str | None:
+    """Turn a configured weights path into an absolute one, or ``None`` if unset.
+
+    ``GV_CLASSIFIER_WEIGHTS``/``GV_DETECTOR_WEIGHTS`` may name a path relative
+    to ``GV_MODEL_DIR`` (the common case — a checkpoint copied into
+    ``models/classifier/resnet18/v1/best.pt``) or an absolute one.
+    """
+    if not weights:
+        return None
+    path = Path(weights)
+    if not path.is_absolute():
+        path = model_dir / path
+    return str(path)
 
 
 def reset_inference_service() -> None:
