@@ -1,0 +1,14 @@
+# Module 16's docker/dashboard.Dockerfile builds with `context: ../dashboard`
+# (docker-compose.yml), not the repo root — Docker looks for .dockerignore
+# INSIDE the build context directory, never the repo-root one, so that file's
+# rules never applied here at all. Found the hard way: the dashboard build
+# context was silently including node_modules/ (205 MB), turning a build that
+# should transfer a few MB in a couple seconds into a 240+ second upload.
+
+node_modules/
+dist/
+.git/
+*.md
+coverage/
+.vscode/
+.idea/
