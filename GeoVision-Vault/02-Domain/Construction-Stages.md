@@ -2,7 +2,7 @@
 title: Construction Stages
 type: domain
 status: canonical
-updated: 2026-08-18
+updated: 2026-08-27
 ---
 
 # Construction Stages — Two-Layer Model ⚖
@@ -43,19 +43,19 @@ YOLO detection instead of a 10-way classifier boundary.
 [[ADR-Index#ADR-037|ADR-037]] and [[Progress-Calculation]] §5.
 
 **Where a captured image falls *within* a stage's 20-point range (e.g. early vs late
-`structural`) is not decided by the classifier at all.** That resolution comes from a fused
-signal combining YOLO detections and frame-to-frame physical change — the exact formula is
-**undecided**, tracked as [[Open-Questions|Q18]]. Until Q18 is resolved, every image inside a
-stage nominally reports that stage's *ceiling* (the table above), which is a regression from
-the old 10-class resolution and is the whole reason Q18 exists.
+`structural`) is not decided by the classifier alone.** Resolved 2026-08-27
+([[ADR-Index#ADR-038|ADR-038]], closing [[Open-Questions|Q18]]): the classifier's own confidence
+and a per-stage checklist of YOLO detections are averaged into a `sub_stage_fraction`, mapped
+onto the class's floor-ceiling band. See [[Progress-Calculation]] §1 for the formula and the
+checklist table. Frame-to-frame physical change was part of the original proposal but is
+deferred to future work.
 
 `class_index` order above is **frozen** once trained — it is the index order the checkpoint
 will use. Adding a class requires retraining and a new model version; never reorder.
 
-Canonical definition file: `ai/src/ai/configs/classes.yaml` (generated into
-`dataset/metadata/progress_reference.csv` by `scripts/generate_progress_reference.py`). **Not
-yet updated to the 4-class table above** — still holds the 10-class definition pending the
-Q18 decision, since regenerating it is a code change and Rule 0 says vault first.
+Canonical definition file: `ai/src/ai/configs/classes.yaml` — updated to the 4-class table
+above 2026-08-27, along with the `detection_checklists` section [[Progress-Calculation]] §1
+describes.
 
 <details>
 <summary>Retired 10-class table (kept for the YOLO class-selection rationale only — click to expand)</summary>
@@ -93,9 +93,7 @@ response to any system prompt.
 
 ## `progress_reference.csv` (tracked in `dataset/metadata/`)
 
-**Not yet regenerated for the 4-class table** — the CSV on disk still reflects the retired
-10-class definition (see the collapsed table above) pending the Q18 decision and the
-`ai/src/ai/configs/classes.yaml` code change. Once regenerated it will look like:
+Regenerated 2026-08-27 from the 4-class table above (`scripts/generate_progress_reference.py`):
 
 ```csv
 class_index,class_name,token,macro_stage,nominal_progress_pct,stage_floor_pct,stage_ceiling_pct

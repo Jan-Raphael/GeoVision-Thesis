@@ -2,7 +2,7 @@
 title: Dataset Spec
 type: dataset
 status: canonical
-updated: 2026-08-18
+updated: 2026-08-28
 ---
 
 # Dataset Specification
@@ -65,10 +65,49 @@ GV_CB01_FDN_0001.jpg,CB01,foundation,13.628000,123.185000,2026-03-04T07:00:00Z,E
 | **total** | **600** | **1 600+** |
 
 Lower than the old 1,500-total floor because there are fewer classes now, **not** because less
-data is needed overall — the resolution that used to come from 10 fine classes now has to come
-from YOLO detection + physical-change signal within each of these 4 buckets ([[Open-Questions|Q18]]),
-which needs its own image volume (detection-annotated, same images) tracked separately once the
-fusion design lands.
+data is needed overall — the resolution that used to come from 10 fine classes now comes from
+the classifier-confidence + YOLO-checklist fusion within each of these 4 buckets
+([[ADR-Index#ADR-038|ADR-038]], closing Q18), which needs its own detection-annotated image
+volume (same images, bounding boxes added) tracked separately.
+
+**Split, 2026-08-28 (`scripts/split_dataset.py`):** groups are discovered automatically (any
+folder whose immediate children are the four class names), not assumed from top-level site
+folder names — `Aldea Grove` turned out to hold three separate houses (`1/2/3`) under one name,
+which a naive per-site split would have leaked across train/test. With only six real groups
+today, the closest achievable split to 70/15/15 while keeping every class present in every
+split is lumpy rather than clean:
+
+| Class | Total | Train | Validation | Test |
+|---|---|---|---|---|
+| Foundation | 37 | 16 (43%) | 5 (14%) | 16 (43%) |
+| Structural | 381 | 267 (70%) | 49 (13%) | 65 (17%) |
+| Roofing | 110 | 37 (34%) | 50 (45%) | 23 (21%) |
+| Finishing | 122 | 48 (39%) | 55 (45%) | 19 (16%) |
+
+State this plainly in the thesis methodology, the same way the grouped-split leakage guard
+itself should be stated — more groups (more distinct real sites) is what actually fixes this,
+not a different split algorithm.
+
+**Team's own estimate (2026-08-27, Q5): 80-130 images/class realistically achievable** —
+below the 150/class minimum above. **Final, verified `dataset/raw/` tally (2026-08-27), after
+sorting the previously-uncategorized photos and de-duplicating HEIC/JPG pairs:**
+
+| Class | Count | vs. team's 80-130 estimate |
+|---|---|---|
+| Foundation | 37 | still short — the one class worth actively collecting more of |
+| Structural | 381 | well past the "comfortable" band |
+| Roofing | 110 | within estimate |
+| Finishing | 122 | within estimate |
+
+Two things surfaced doing this count. **50 of `Paramjeet/`'s photos were `.HEIC`** (the iPhone
+default format) — invisible to the entire pipeline, since `ai/preprocessing/pipeline.py`'s
+`load_image` goes through `cv2.imdecode`, which cannot decode HEIC at all. Every one now has a
+`.jpg` copy sitting alongside its original (converted with `pillow-heif`, not a committed
+dependency — see `scripts/audit_dataset_quality.py`), so they finally count toward training.
+**A separate `Online Dataset/` source turned out to be entirely `.png`**, not `.jpg` — already
+readable by the pipeline, just missed by an earlier audit script that only looked for
+`.jpg`/`.jpeg`. Both are worth remembering if a future capture source shows up in a format that
+looks like an image count but silently isn't one to any script here.
 
 With a fixed-angle camera producing 2 images/day, one site yields ~60 images/month — not
 enough alone. **Plan for all four sources:**

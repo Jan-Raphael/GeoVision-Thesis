@@ -2,7 +2,7 @@
 title: Progress Calculation
 type: domain
 status: canonical
-updated: 2026-08-18
+updated: 2026-08-27
 ---
 
 # Progress Calculation — the core algorithm
@@ -11,17 +11,12 @@ updated: 2026-08-18
 > `ai/progress/aggregator.py` with no I/O, no ORM, no torch — so it is fully unit-testable
 > and can be walked through line by line during the defense.
 
-> ⚠ **§1 and §5 below describe the pre-2026-08-18 design and are out of date.**
-> [[ADR-Index#ADR-036|ADR-036]] narrowed the classifier to 4 classes and moved sub-stage
-> resolution to a fused classifier+detection+physical-change signal that is **not yet
-> designed** — tracked as [[Open-Questions|Q18]]. [[ADR-Index#ADR-037|ADR-037]] replaces §5's
-> automatic `awaiting_inspection` trigger with an owner-initiated one. §2, §3, §4, §6, §7 (the
-> device-median → multi-camera-fusion → EMA/ratchet → per-stage-percentage → persistence
-> pipeline) are unaffected — they operate on whatever `raw_pct` §1 hands them, regardless of
-> how it's computed, and stay canonical as written. Do not implement §1/§5 as written below
-> until Q18 is resolved; the code today (`ai/progress/aggregator.py`, tested against the
-> worked example in §8) still reflects the retired 10-class design and has not been touched
-> pending that decision.
+> **Revised 2026-08-27 (ADR-038, closing Q18).** §1 now describes the fused
+> classifier-confidence + YOLO-checklist formula, implemented and tested (`ai/progress/
+> estimator.py`, `ai/progress/mapping.py`, `classes.yaml`). §5 was separately superseded by
+> [[ADR-Index#ADR-037|ADR-037]] (owner-initiated approval, no automatic trigger) — unchanged by
+> this revision. §2–§7 were never affected by either change: they operate on whatever `raw_pct`
+> §1 hands them, regardless of how it's computed.
 
 ---
 
@@ -35,22 +30,54 @@ per-project-per-window → smoothed & ratcheted.
 
 ---
 
-## 1. Per-image raw progress
+## 1. Per-image raw progress (ADR-038)
 
 ```python
-def image_progress(fine_class: FineClass, confidence: float) -> ImageProgress:
-    """Nominal progress for one classified image."""
+def fused_raw_pct(class_index: int, confidence: float, detected_classes: Iterable[str]) -> float:
+    """Where within a class's 20-point band one image falls."""
 ```
 
-- `raw_pct = PROGRESS_REFERENCE[fine_class].nominal_progress_pct`
-- **Confidence gate:** `MIN_CONFIDENCE = 0.60`.
+A classifier class only says *which* 20-point band an image falls in. Where within that band
+is resolved by fusing two independent signals, **averaged**:
+
+- `classifier_fraction = confidence` — the softmax probability of the predicted class, used as
+  a proxy for how far into the stage's typical appearance the photo sits.
+- `detector_fraction = (checklist elements detected) / (checklist size)` — YOLO's physical
+  corroboration, using the per-class checklist in `classes.yaml`'s `detection_checklists`:
+
+  | Class | Checklist |
+  |---|---|
+  | Foundation (`FDN`) | rebar, column |
+  | Structural (`STR`) | rebar, beam, wall, roofing |
+  | Roofing (`ROF`) | roofing, window, door, tile |
+  | Finishing (`FIN`) | window, door, tile, railing, lighting |
+
+  Each stage's own elements measure how settled it is; one element borrowed from the *next*
+  stage catches an early transition (a window frame appearing near the end of roofing is real
+  evidence the roof is nearly done, not noise).
+
+```
+sub_stage_fraction = (classifier_fraction + detector_fraction) / 2
+raw_pct = stage_floor_pct + sub_stage_fraction * (stage_ceiling_pct - stage_floor_pct)
+```
+
+- **Confidence gate:** `MIN_CONFIDENCE = 0.60`, unchanged and independent of the above.
   - `confidence >= 0.60` → `eligible = True`
   - `confidence < 0.60` → stored, `low_confidence = True`, `eligible = False`
-    (shown in the image feed with a badge; excluded from aggregation)
+    (shown in the image feed with a badge; excluded from aggregation). Note that confidence now
+    also shapes `raw_pct`'s *magnitude* (it is half of `sub_stage_fraction`), not just
+    eligibility — a low-confidence prediction that still clears the gate pulls the fused
+    percentage toward the stage floor, which the retired flat-lookup design did not do.
 - **Quality gate** (runs before the model, in `ai/preprocessing/quality.py`): images
   rejected for blur (variance of Laplacian < 60), darkness (mean L < 25), or occlusion
   (> 40 % of the reference façade ROI covered by a near-field blob) are marked
   `status='rejected'` and never scored.
+- **Deferred:** frame-to-frame physical change (comparing consecutive captures from the same
+  device) was part of the original proposal but needs calibration data this project does not
+  yet have — tracked in [[Open-Questions]] §3, future work.
+- **The contract deadline plays no part in this formula.** It drives the project's schedule
+  *status* instead — see [[Project-Status-Rules]]'s `is_behind_schedule`. Folding it into
+  `raw_pct` would make the number stop meaning "what the camera can see was built" (ADR-038).
 
 ## 2. Per-device, per-window value
 

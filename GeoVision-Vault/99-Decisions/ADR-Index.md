@@ -2,7 +2,7 @@
 title: ADR Index
 type: decisions
 status: canonical
-updated: 2026-08-18
+updated: 2026-08-28
 ---
 
 # Architecture Decision Records
@@ -749,6 +749,106 @@ could reintroduce a *notification* (nudge the owner to go look) without reintrod
 *automatic state change*.
 **Rejected.** Keying an automatic trigger off `finishing` reaching the ceiling instead of
 `completed` — considered and explicitly rejected in favor of owner-only judgement.
+
+## ADR-038 — The fused sub-stage formula (closes Q18): confidence + YOLO checklist, averaged
+**Status:** Accepted · 2026-08-27 · resolves [[Open-Questions#Q18|Q18]], completes
+[[ADR-Index#ADR-036|ADR-036]]
+**Context.** ADR-036 narrowed the classifier to 4 macro-aligned classes and moved sub-stage
+resolution (where within a class's 20-point band one image falls) to a fused
+classifier+detection signal, but did not decide the formula. The team's own framing of it
+(2026-08-27): the classifier states a percentage for the current stage, YOLO detection
+physically corroborates it, and the two are **averaged** — plus a separate wish to have the
+project's **contract deadline** be "the main dictator" of where progress should be.
+**Decision.**
+1. `sub_stage_fraction = (classifier_fraction + detector_fraction) / 2`, where
+   `classifier_fraction` is the softmax confidence of the predicted class (used as a proxy for
+   how far into the stage's typical appearance the photo sits), and `detector_fraction` is the
+   fraction of that stage's YOLO checklist (`classes.yaml`'s `detection_checklists`) found in
+   the frame. `raw_pct = stage_floor + sub_stage_fraction * span`. Implemented in
+   `ai/progress/estimator.py` (`fused_raw_pct`) and `ai/progress/mapping.py`
+   (`detection_checklist_for`); [[Progress-Calculation]] §2–§7 are untouched, exactly as ADR-036
+   anticipated.
+2. Checklists reuse [[Construction-Stages]]'s existing visual-disambiguation table almost
+   verbatim: `FDN: [rebar, column]`, `STR: [rebar, beam, wall, roofing]`,
+   `ROF: [roofing, window, door, tile]`, `FIN: [window, door, tile, railing, lighting]`. Each
+   stage's own elements measure how settled it is; one element borrowed from the next stage
+   catches an early transition.
+3. **The contract deadline does *not* enter this formula.** It already has a home:
+   [[Project-Status-Rules]]'s `is_behind_schedule`/`expected_pct` compares the *displayed*
+   percentage against a linear time-elapsed curve to `deadline_date`, driving the `delayed`
+   status and system remarks. Folding the deadline into `raw_pct` itself would make the
+   headline number stop meaning "what the camera can see was built" and start meaning some
+   conflation of that with "are we on schedule" — which would undermine the thesis's actual
+   claim (an AI system reading physical progress from images) and duplicate a mechanism that
+   already exists. The deadline governs the *status badge*, not the *progress number*.
+4. **Frame-to-frame physical change** (comparing consecutive captures from the same device),
+   part of the original Q18 draft, is explicitly deferred to future work — it needs calibration
+   data this project does not have yet, and confidence+checklist fusion is sufficient to unblock
+   Modules 07/08/09 on its own.
+5. The retired `Completed` (`CMP`) class's old worked-example role is replaced by a `Finishing`
+   image at its own ceiling (checklist fully satisfied, confidence 1.0) — the new stand-in for
+   "looks finished to the machine" in tests and the evaluation CLI's demonstration series.
+**Consequences.** `classes.yaml`, `ai/progress/mapping.py` (`FineClass` now `FDN/STR/ROF/FIN`),
+`ai/progress/estimator.py`, `backend/app/worker/inference.py` (`_stage_for` now takes confidence
++ detections, not just a class index), `dataset/metadata/progress_reference.csv`, and both
+test suites (`ai/tests/test_aggregator.py`, `ai/tests/test_run_all.py`,
+`ai/tests/test_inference.py`) all updated and green (276 ai tests, 435 backend unit tests,
+ruff/mypy/lint-imports clean). A real latent bug surfaced and was fixed in the same pass:
+`aggregator.py`'s `_stage_bands()` derived all five macro-stage bands from the classifier's own
+class table, which only worked before by accident (the retired `CMP` class happened to carry an
+`approval` macro-stage tag); with no class predicting `approval` anymore, the band silently
+disappeared. Fixed by reading all five bands from `classes.yaml`'s `macro_stages` section
+directly (`mapping.macro_stage_bands()`), independent of which stages a class predicts.
+A published side effect worth defending: confidence now shapes *magnitude*, not just
+*eligibility* — a low-confidence prediction that still clears `MIN_CONFIDENCE` pulls the fused
+percentage toward the stage floor, which it did not do under the old flat-lookup design.
+**Rejected.** (a) Folding the contract deadline directly into `raw_pct` — see point 3. (b)
+Implementing frame-to-frame physical change now — deferred, see point 4. (c) A weighted (not
+averaged) combination of classifier and detector — the team's own framing was explicitly an
+average; a weighted scheme is a plausible future refinement once real accuracy data exists to
+justify a weighting.
+
+## ADR-039 — Predictions are superseded, not deleted (closes Q11)
+**Status:** Accepted · 2026-08-28 · resolves [[Open-Questions#Q11|Q11]]
+**Context.** Reprocessing an image deleted its previous prediction outright, so "what did the
+old model say?" became unanswerable after a retrain — a real gap for the thesis's
+model-comparison chapter. The schema also physically prevented the alternative: `image_id` on
+`predictions` carried a plain `UNIQUE` constraint, so a second row for one image would have been
+rejected at the database, not just discouraged by application logic.
+**Decision.**
+1. Add `predictions.superseded_at TIMESTAMPTZ NULL`. `NULL` means "the current prediction for
+   this image"; reprocessing sets it instead of deleting the row
+   (`PredictionRepository.supersede_for_image`, replacing `delete_for_image`).
+2. Replace the plain unique constraint with a **partial** unique index —
+   `UNIQUE (image_id) WHERE superseded_at IS NULL` — since a plain constraint cannot express
+   "unique among current rows only." This is what stops a reprocessed image from voting twice in
+   `list_eligible_in_window`.
+3. `ImageModel.prediction` (the relationship most readers use) is filtered to
+   `superseded_at IS NULL` via `primaryjoin` and made `viewonly=True` — every existing reader
+   (presenters, PDF/CSV reports) keeps seeing exactly one prediction per image, unchanged. Full
+   history is read explicitly through the new `list_history_for_image`, never through this
+   relationship. `cascade="delete-orphan"` was deliberately **removed** from it: that cascade
+   deletes a child the instant it stops matching the relationship's join condition, which a
+   supersede would trigger immediately — exactly the deletion this ADR exists to stop. The FK's
+   `ondelete="CASCADE"` still removes every prediction (current or superseded) when the image
+   itself is deleted, independent of the ORM relationship.
+4. Fixed in the same migration, found while touching this table: `fine_class_index`'s check
+   constraint still allowed `0..9`, the retired 10-class range from before
+   [[ADR-Index#ADR-036|ADR-036]]/[[ADR-Index#ADR-038|ADR-038]]. Tightened to `0..3`. The dev
+   database's 60 existing prediction rows were all pre-rescope seed/test artifacts (verified:
+   none newer than the 2026-08-18 rescope) and were deleted as part of the same migration —
+   keeping them would have violated the new constraint while being actively wrong, not just out
+   of range.
+**Consequences.** Migration `c3f7a1b92e04` (`m09_predictions_kept_not_deleted`), round-tripped
+upgrade→downgrade→upgrade. `Prediction` gained `superseded_at` and `is_current`. 700 backend
+tests green (was 700 before too — same count, different fixtures: several tests across
+`test_predictions_api.py`, `test_reports_api.py`, `test_progress_recompute.py`,
+`test_reporting.py` used out-of-range `fine_class_index` values from the retired scheme and
+needed updating regardless of Q11, surfaced only once the tightened constraint caught them).
+**Rejected.** Keeping a plain `UNIQUE(image_id)` and distinguishing "current" by
+`MAX(created_at)` at query time — every reader would need the same window-function logic
+repeated, and a query that forgets it silently reads a stale prediction instead of failing
+loudly the way inserting a second current row now does.
 
 ---
 

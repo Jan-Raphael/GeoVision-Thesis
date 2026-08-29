@@ -2,7 +2,7 @@
 title: PENDING — master priority board
 type: index
 status: living
-updated: 2026-08-18
+updated: 2026-08-28
 ---
 
 # PENDING — what needs doing, in priority order
@@ -48,8 +48,11 @@ without hardware or a labelled dataset has shipped — `ai/evaluation/` (metrics
 detector eval, progress eval, the `gv-evaluate` CLI), coverage thresholds enforced in CI, the
 generalised client/server contract test, `documentation/openapi.json` + `erd.mmd` export, a
 Playwright E2E scaffold (now run for real, 12/12 passing, Q16 closed), two k6 load scripts, and
-[[Hardware-Test-Log]]. **Next up:** [[Open-Questions|Q18]] (the fused progress formula), then
-[[Module-16-Deployment]]. **13 waits on hardware; 07/08 on the dataset** — Module 09 was built
+[[Hardware-Test-Log]]. **[[Open-Questions|Q18]] resolved 2026-08-27** ([[ADR-Index#ADR-038|ADR-038]])
+— the fused progress formula is implemented, tested, and wired into the worker. **Next up:** a
+local coverage run against live services (Q17), the manual phone/webcam capture tool (Q2), Kaggle
+training notebooks (Q7), then [[Module-16-Deployment]]. **13 waits on hardware; 07/08 on the
+dataset (specifically Foundation-class volume, Q5) and YOLO annotation** — Module 09 was built
 ahead of both against a deterministic `StubClassifier`, so neither blocks the *code*: 07/08 are a
 weights swap behind the `StageClassifier` protocol, and `gv-evaluate` already reports exactly
 which of its artifacts are waiting on them, by name, every time it runs.
@@ -59,13 +62,14 @@ which of its artifacts are waiting on them, by name, every time it runs.
 > closed 2026-08-18 — a full run against live Postgres/Redis/MinIO measured 81.00%; the
 > threshold is set to 78.
 
-> ⚠ **2026-08-18 domain rescope — read before touching Module 07, 08, or 09 code.** The
-> classifier narrows from 10 fine classes to 4 macro-aligned ones, YOLO's object list is
-> redefined, and detection becomes a direct progress input instead of an advisory
+> ⚠ **2026-08-18 domain rescope, completed 2026-08-27 — read before touching Module 07, 08, or
+> 09 code.** The classifier narrows from 10 fine classes to 4 macro-aligned ones, YOLO's object
+> list is redefined, and detection is a direct fusion input rather than an advisory
 > corroboration signal. See [[ADR-Index#ADR-036|ADR-036]], [[ADR-Index#ADR-037|ADR-037]], and
-> **[[Open-Questions|Q18]] — the fused progress formula, which blocks the actual code change**.
-> `dataset/raw/`'s existing Foundation/Structural/Roofing/Finishing folders already match the
-> new class list, which is good news: no relabeling needed at the macro level.
+> [[ADR-Index#ADR-038|ADR-038]] (the fused progress formula — now implemented, not just
+> decided). `dataset/raw/`'s existing Foundation/Structural/Roofing/Finishing folders already
+> match the new class list — no relabeling needed at the macro level, though ~39 images are
+> still sitting unsorted and Foundation's volume (~30 images) is well short of target (Q5).
 
 > ⚠ **Fix Q12 before Module 12.** `get_session` commits *after* the response is sent
 > (measured 6.9 ms), so a real browser that creates a project and immediately navigates to it
@@ -101,7 +105,9 @@ path of the thesis.**
 | P1-4 | **Set up CVAT and start annotating** | ongoing | Annotation is slow and cannot be rushed at the end. [[Annotation-Guide]] |
 | P1-5 | **Get the stage percentages reviewed** by a civil engineer / project manager (Q1) | days–weeks to schedule | Every progress number in the system rests on this table. A cited expert review turns an assumption into a defensible methodology choice. [[Construction-Stages]] |
 | P1-6 | Deploy the camera on site as early as possible | weeks of accumulation | A rising progress curve over real calendar time is the single most convincing demo artifact. |
-| P1-7 | Confirm GPU access for training (Q7) | — | No local GPU ⇒ budget Colab/Kaggle sessions for [[Module-08-YOLO-Detection]] |
+| P1-7 | ~~Confirm GPU access for training (Q7)~~ | — | ✅ **answered 2026-08-27 — Kaggle.** Team does not yet know how to run training there; ready-to-run notebooks for `gv-train-classifier`/`gv-train-detector` are next. |
+| ~~P1-8~~ | ~~No ESP32-CAM in hand right now (Q2). Build a phone/webcam capture uploader.~~ | — | ✅ **done 2026-08-28** — `backend/scripts/capture_and_upload.py`. Unblocks real (non-synthetic) dataset collection without waiting on hardware or the site. |
+| P1-9 | **Collect more Foundation-stage photos/video specifically (Q5).** | ongoing | Final verified count 2026-08-27: Foundation 37, Structural 381, Roofing 110, Finishing 122 — every other class is at or past the team's own 80-130/class estimate; Foundation is the one real shortfall. |
 
 > **If you do nothing else this week, do P1-1, P1-2, and P1-3.** They are all waiting on other
 > people or on shipping, and every day of delay is unrecoverable.
@@ -145,8 +151,8 @@ Authoritative board: [[Build-Order]].
 | 04 | Projects & Folders | ✅ done | — |
 | 05 | Device Pairing & Ingestion | ✅ done | — |
 | 06 | AI Preprocessing | ✅ done | — |
-| 07 | Classifier Training | ⏸ blocked | **P1-3, P1-4** (dataset) + **Q18** (fusion formula, 2026-08-18 rescope — [[ADR-Index#ADR-036\|ADR-036]]). Scope narrowed to 4 classes; not yet a weights swap until Q18 lands. |
-| 08 | YOLO Detection | ⏸ blocked | P1-3, P1-4 + **Q18**. Class list redefined 2026-08-18 ([[ADR-Index#ADR-036\|ADR-036]]) — detection is no longer advisory-only. |
+| 07 | Classifier Training | ◑ in progress | Code shipped and run for real 2026-08-28: split script, dataset/transforms, ResNet18 model + trainer + CLI, Kaggle notebook. First real checkpoint trained — macro-F1 0.46, honestly below target due to dataset size/imbalance, not a bug. More Foundation-class images (P1-9) is the highest-leverage next step to improve it. |
+| 08 | YOLO Detection | ⏸ blocked | Code shipped 2026-08-28 (wrapper, training CLI, Kaggle notebook, placeholder `data.yaml`) — the only real blocker left is bounding-box annotation, which has not started. |
 | 09 | Inference & Progress | ✅ done, **rework pending Q18** | — *built early against a `StubClassifier`, which unblocked 10–14; §1/§5 of the algorithm are marked superseded until [[Open-Questions\|Q18]] resolves* |
 | 10 | Reports & Remarks | ✅ done | — |
 | 11 | Public Dashboard | ✅ done | — |
@@ -171,7 +177,7 @@ Unresolved questions, from [[Open-Questions]]. Each one blocks or reshapes work:
 | Q4 | Where does the server run? | P2 |
 | Q10 | Where do checkpoints live? | P2 |
 | Q13 | Feed owner/thumbnail + search locations | P2 — before the demo |
-| Q18 | Fused progress formula (classifier + YOLO + physical change) undecided | **P1 — blocks Module 07/08/09 rework** |
+| ~~Q18~~ | ~~Fused progress formula (classifier + YOLO + physical change) undecided~~ | ✅ resolved 2026-08-27, [[ADR-Index#ADR-038\|ADR-038]] |
 | Q11 | Superseding predictions needs a migration | P3 |
 | Q8 | Panel documentation format | P2 |
 | Q6 | Timezone / window policy | assumed daily, `Asia/Manila` |
