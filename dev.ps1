@@ -169,7 +169,14 @@ switch ($Task.ToLower()) {
 
     'api' {
         Write-Step 'Starting API on http://localhost:8000'
-        Invoke-In 'backend' 'uv' @('run', 'uvicorn', 'app.main:app', '--reload', '--port', '8000')
+        # --host 0.0.0.0, not the uvicorn default (127.0.0.1): the Makefile's
+        # api/dev tasks already bind every interface, but this one silently
+        # didn't -- meaning no device on the LAN (a phone, an ESP32) could
+        # ever reach it here, firewall rules notwithstanding. Found live
+        # while testing phone pairing: the connection just hung, since a
+        # loopback-only bind refuses external traffic before the firewall is
+        # even consulted.
+        Invoke-In 'backend' 'uv' @('run', 'uvicorn', 'app.main:app', '--reload', '--host', '0.0.0.0', '--port', '8000')
     }
 
     'dashboard' {

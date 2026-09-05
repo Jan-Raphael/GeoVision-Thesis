@@ -249,9 +249,9 @@ function toHex(bytes) {
 function cryptoSelfTestPasses() {
   const enc = new TextEncoder();
   const emptyOk = toHex(sha256(enc.encode(""))) ===
-    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85";
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
   const abcOk = toHex(sha256(enc.encode("abc"))) ===
-    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015a";
+    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
   return emptyOk && abcOk;
 }
 
