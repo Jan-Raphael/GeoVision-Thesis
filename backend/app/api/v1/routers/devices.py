@@ -35,7 +35,7 @@ from app.domain.entities import CaptureSchedule
 from app.domain.enums import CameraFace, Permission
 from app.domain.services.authorization import AccessContext
 from app.infrastructure.audit import AuditAction
-from app.infrastructure.qr import build_provisioning_qr
+from app.infrastructure.qr import build_pair_page_qr, build_provisioning_qr
 
 router = APIRouter(tags=["devices"], route_class=TransactionalRoute)
 limiter = get_limiter()
@@ -71,6 +71,8 @@ class PairingTicketResponse(BaseModel):
     face: CameraFace
     device_name: str
     qr_png_base64: str = Field(description="Scan instead of typing")
+    pair_page_url: str = Field(description="Opens a browser page to pair a phone or webcam")
+    pair_page_qr_base64: str = Field(description="Scan with a phone to open pair_page_url")
 
 
 class ClaimRequest(BaseModel):
@@ -199,6 +201,10 @@ async def issue_pairing_token(
         device_name=ticket.device_name,
         qr_png_base64=build_provisioning_qr(
             ticket.provisioning_payload, server_url=settings.public_base_url
+        ),
+        pair_page_url=f"{settings.public_base_url.rstrip('/')}/pair?code={ticket.display_code}",
+        pair_page_qr_base64=build_pair_page_qr(
+            ticket.display_code, server_url=settings.public_base_url
         ),
     )
 

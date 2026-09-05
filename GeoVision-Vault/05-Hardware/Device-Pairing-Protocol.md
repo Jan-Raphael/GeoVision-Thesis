@@ -2,7 +2,7 @@
 title: Device Pairing Protocol
 type: hardware
 status: canonical
-updated: 2026-08-14
+updated: 2026-09-05
 ---
 
 # Device Pairing & Authentication Protocol
@@ -145,6 +145,33 @@ One device per `(project, face)`. Owner pairs up to 4 (`front`, `front_diagonal`
 `back_diagonal`). Their readings are fused by weighted mean — [[Progress-Calculation]].
 `ESP_NG_00_FD2`-style second cameras on one face require `?force=true` and are documented
 as out of default scope.
+
+## Pairing a phone or webcam instead of an ESP32
+
+Phase 1's QR (`build_provisioning_qr`) encodes raw JSON for a *human* to read and retype into
+an ESP32 captive portal — it was never meant to be opened as a link. A phone's own camera app
+doesn't know that: it notices the embedded `server` URL inside the JSON and "helpfully" opens
+*that*, landing on a bare API endpoint with nothing to render (found 2026-09-05, live, on a
+real phone: the page hung with a stalled progress bar and no way forward).
+
+`issue_pairing_token` now also returns `pair_page_url`/`pair_page_qr_base64`
+(`build_pair_page_qr`) — a **second**, additive QR encoding an actual URL,
+`{server}/pair?code={code}`. `GET /pair` (unauthenticated, unprefixed like `/health` —
+`app/api/v1/routers/mobile_pair.py`) serves a self-contained HTML+JS page
+(`app/static/mobile_pair.html`) that claims the code and signs uploads **in the browser**,
+using the exact same `/pair/claim` and `/ingest/images` endpoints a real ESP32 uses — no new
+server-side pairing path, no firmware, no companion app.
+
+The one real constraint this ran into: `window.crypto.subtle` (Web Crypto) only exists in
+*secure contexts* — HTTPS, or `http://localhost` — and a phone on the same Wi-Fi opening
+`http://<lan-ip>:8000` is neither. The page therefore implements SHA-256 and HMAC-SHA256 in
+plain JavaScript rather than relying on SubtleCrypto, verified byte-for-byte against Python's
+`hashlib`/`hmac` and RFC 4231's test vectors before shipping (see Progress-Log), plus a
+self-test the page runs on every load that refuses to proceed if the hand-rolled hash is ever
+wrong.
+
+The original ESP32-facing QR is untouched — this is purely additive, so nothing about real
+hardware provisioning changed.
 
 ## Why not mTLS / JWT for devices?
 

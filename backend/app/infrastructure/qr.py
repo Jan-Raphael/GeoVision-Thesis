@@ -13,7 +13,7 @@ import io
 import json
 from typing import Any
 
-__all__ = ["build_provisioning_qr", "render_qr_png"]
+__all__ = ["build_pair_page_qr", "build_provisioning_qr", "render_qr_png"]
 
 #: Error-correction level M tolerates ~15 % damage. Chosen over the maximum (H)
 #: because the payload is small, and a denser code is harder to scan off a
@@ -68,3 +68,24 @@ def build_provisioning_qr(payload: dict[str, Any], *, server_url: str) -> str:
     document = {**payload, "server": server_url.rstrip("/")}
     encoded = json.dumps(document, separators=(",", ":"))
     return base64.b64encode(render_qr_png(encoded)).decode()
+
+
+def build_pair_page_qr(code: str, *, server_url: str) -> str:
+    """Build the QR for pairing a phone or webcam instead of an ESP32.
+
+    Unlike :func:`build_provisioning_qr`, this one encodes a plain **URL**, not
+    JSON — a phone's own camera app opens a URL as a link, which is the whole
+    point (found the hard way: a phone scanning the ESP32 QR "opened" the raw
+    JSON's embedded server address instead, landing on a bare API endpoint with
+    nothing to render). Visiting the URL serves ``/pair``'s self-contained
+    capture page, which claims the code and uploads directly from the browser.
+
+    Args:
+        code: The pairing display code (e.g. ``K7M29XQF``).
+        server_url: Base URL of the API the page should call.
+
+    Returns:
+        A ``data:``-ready base64 PNG string, without the URI prefix.
+    """
+    url = f"{server_url.rstrip('/')}/pair?code={code}"
+    return base64.b64encode(render_qr_png(url)).decode()

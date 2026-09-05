@@ -168,6 +168,31 @@ export function PairingModal({ projectId, pairedDeviceName, onClose }: PairingMo
               : 'This code has expired.'}
           </p>
 
+          {ticket.pair_page_qr_base64 && (
+            <div className="mt-5 flex flex-col items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="text-center text-sm font-medium text-slate-700">
+                Using a phone or webcam instead of an ESP32?
+              </p>
+              <img
+                src={`data:image/png;base64,${ticket.pair_page_qr_base64}`}
+                alt="Scan with a phone to open the capture page"
+                className="h-32 w-32 rounded border border-slate-200 bg-white p-1"
+              />
+              <p className="text-center text-xs text-slate-500">
+                Scan with the phone's own camera app — it opens a page that pairs and uploads
+                directly from the browser, no app required.
+              </p>
+              <a
+                href={ticket.pair_page_url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-medium text-sky-700 underline"
+              >
+                Or open the link directly
+              </a>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => {

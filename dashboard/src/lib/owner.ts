@@ -109,6 +109,8 @@ export interface PairingTicket {
   face: string;
   device_name: string;
   qr_png_base64: string | null;
+  pair_page_url: string;
+  pair_page_qr_base64: string | null;
 }
 
 export interface CreateProjectInput {

@@ -191,6 +191,7 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
         health,
         ingest,
         members,
+        mobile_pair,
         models,
         predictions,
         progress,
@@ -203,6 +204,7 @@ def _register_routers(app: FastAPI, settings: Settings) -> None:
     )
 
     app.include_router(health.router)
+    app.include_router(mobile_pair.router)
 
     prefix = settings.api_v1_prefix
     app.include_router(auth.router, prefix=prefix)

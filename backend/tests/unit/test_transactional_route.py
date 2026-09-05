@@ -150,8 +150,10 @@ class TestEveryWritingRouterIsCovered:
         routers = pathlib.Path("app/api/v1/routers")
         missing: list[str] = []
         for path in sorted(routers.glob("*.py")):
-            if path.name in {"__init__.py", "health.py"}:
-                # health touches no database and should not pay for a session.
+            if path.name in {"__init__.py", "health.py", "mobile_pair.py"}:
+                # Neither touches a database and should not pay for a session:
+                # health is a liveness probe, mobile_pair only ever serves a
+                # static HTML file.
                 continue
             source = path.read_text(encoding="utf-8")
             if "APIRouter(" in source and "route_class=TransactionalRoute" not in source:
